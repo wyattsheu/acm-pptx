@@ -37,7 +37,7 @@ lets the plain skill hand work off to the executable one.
         {"text": "Bulleted tier", "level": 1},
         "plain string is shorthand for level 0"
       ],
-      "notes": "Speaker notes. The argument, the numbers you'll quote."
+      "notes": "Speaker notes, in 中文, full sentences, 3-6 per content slide, no length limit. The argument, the numbers you'll quote and their baseline, the questions you expect."
     },
     {
       "role": "project_conclusion",

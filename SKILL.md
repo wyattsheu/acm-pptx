@@ -1,7 +1,7 @@
 ---
 name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports, project/research updates, and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, or any .pptx/.potx that should follow ACM Lab format, and whenever a deck is being created, edited, or read for this lab. Also use it when the user hands you an outline and asks for slides, or mentions Prof. Huang Ching-Chun's lab meeting. Do not build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
-version: 1.1.0
+version: 1.2.0
 template_version: template_final.pptx (22 slides, 13.333in x 7.5in)
 license: Lab-internal use
 ---
@@ -74,8 +74,11 @@ slide, breadcrumbs identical, which is correct for a multi-experiment week.
 - **Telegraphic wording.** No hedges or framing clauses: `Cost down 23%
   (p < 0.01)`, never `Our results demonstrate that costs were significantly
   reduced`. Phrases like *we propose*, *it is worth noting*, *this shows that*
-  are the tell of machine-written slides. `references/lab-rules.md` §Writing
-  discipline is the full standard — read it, it governs every line you write.
+  are the tell of machine-written slides. But never compress away the baseline
+  a number beats, its units and dataset, or an acronym's first expansion — a
+  line that leaves the audience asking "compared to what?" is too short, not
+  too long. `references/lab-rules.md` §Writing discipline is the full standard
+  — read it, it governs every line you write.
 - **One idea per slide**, short phrases, no paragraph blocks, ~40 words of body
   text as a hard ceiling.
 - **Bullet tiers**: `level: 0` is the bold header tier, `level: 1` the
@@ -83,7 +86,11 @@ slide, breadcrumbs identical, which is correct for a multi-experiment week.
   tiers, so do not try to fake indentation with spaces or `-`.
 - **Speaker notes** (`notes`) carry what you would say — the argument, the
   numbers you will quote, the questions you expect. Never put them on the
-  slide.
+  slide. Write them in 中文 (technical terms in English), in full sentences,
+  three to six per content slide, with no length limit — the 40-word ceiling
+  applies to the slide body only. Terse slides are only safe when the notes
+  are full; thin notes plus a terse slide means the content was lost, not
+  compressed.
 - **Tables** (`conclusion`, `paper_list`, `summary`) take a list; unused rows
   are blanked automatically. Leave the numbering column alone.
 - Emoji status markers in the summary task table are part of the template's

@@ -86,9 +86,43 @@ meaning survives without them. Write `Cost down 23% (p < 0.01)`, not
 phrases — *we propose*, *it is worth noting*, *this demonstrates that*,
 *in order to* — are the clearest tell of machine-written slides. Cut them.
 
+**What telegraphic does not mean.** The target is words that carry no
+information, not information itself. A line is too short the moment the
+audience cannot reconstruct what it refers to. Never compress away:
+
+- the baseline or condition a number is measured against — `+3.2 dB` alone is
+  unreadable; `+3.2 dB PSNR over SwinIR` is not
+- units, dataset, and split (`mIoU on Cityscapes val`)
+- a symbol or acronym on first appearance — expand it once, then abbreviate
+- which part of a pipeline a claim applies to, when the deck has several
+- the difference between what an author claims and what the evidence shows
+
+If a slide reads as terse but empty, the fix is usually to add back one of the
+above — not to relax the word ceiling and write prose again. Test: hand the
+slide to a labmate who is not on this project. If they must ask "compared to
+what?" or "on which set?", the compression went too far.
+
 **~40 words of body text per slide, hard.** Past that the slide is doing two
 jobs: split it, push the detail into the speaker notes, or move it to the
-appendix. Three to five bullets is typical; more than five is a warning.
+appendix. Three to five bullets is typical; more than five is a warning. The
+ceiling covers slide body text only. It has never applied to speaker notes.
+
+**Speaker notes carry the detail the slide sheds.** The two rules work as a
+pair: the slide holds the claim, the notes hold the argument. Compression on
+the slide is only legitimate because the notes are full — a deck with terse
+slides *and* thin notes has lost the content, not compressed it.
+
+Notes are written in the language the presenter will actually speak — 中文 by
+default for lab meetings, with technical terms left in English (`我們把
+attention map 拿掉之後 mIoU 掉了 4 個點`). They are full sentences, not
+fragments, and have no length limit; three to six sentences per content slide
+is normal, more on a method or results slide.
+
+Each note should cover, as applicable: how this slide follows from the previous
+one; what the numbers on screen mean and against what baseline; why this design
+choice rather than the obvious alternative; what is still uncertain; the
+question this slide is likely to draw and the answer. Write them as speech, not
+as a written summary — if it cannot be said out loud comfortably, rewrite it.
 
 **One argument per talk.** The instinct is to present everything done. Pick the
 claim that can be carried convincingly in the time available; everything else
