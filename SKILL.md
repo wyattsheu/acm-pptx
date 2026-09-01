@@ -1,7 +1,7 @@
 ---
 name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports, project/research updates, and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, or any .pptx/.potx that should follow ACM Lab format, and whenever a deck is being created, edited, or read for this lab. Also use it when the user hands you an outline and asks for slides, or mentions Prof. Huang Ching-Chun's lab meeting. Do not build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
-version: 1.0.0
+version: 1.1.0
 template_version: template_final.pptx (22 slides, 13.333in x 7.5in)
 license: Lab-internal use
 ---
@@ -68,7 +68,16 @@ slide, breadcrumbs identical, which is correct for a multi-experiment week.
 
 - **Claim-based titles.** `Latency drops 3x once the verifier is cached`, not
   `Results`. The handbook names generic titles as a failure mode.
-- **One idea per slide**, short phrases, no paragraph blocks.
+- **Ghost deck test before building.** Read the outline's titles in sequence,
+  bodies ignored. They must carry the whole argument alone. If they read as a
+  list of topics, fix the outline first — do not build and patch later.
+- **Telegraphic wording.** No hedges or framing clauses: `Cost down 23%
+  (p < 0.01)`, never `Our results demonstrate that costs were significantly
+  reduced`. Phrases like *we propose*, *it is worth noting*, *this shows that*
+  are the tell of machine-written slides. `references/lab-rules.md` §Writing
+  discipline is the full standard — read it, it governs every line you write.
+- **One idea per slide**, short phrases, no paragraph blocks, ~40 words of body
+  text as a hard ceiling.
 - **Bullet tiers**: `level: 0` is the bold header tier, `level: 1` the
   bulleted tier. The builder maps levels onto the template's own indent
   tiers, so do not try to fake indentation with spaces or `-`.

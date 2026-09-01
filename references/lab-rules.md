@@ -74,6 +74,60 @@ Following the paper section by section · too much background · reading the
 slides · dense uncropped figures and full tables · generic titles · no critique
 or overclaiming · no rehearsal · ending with only "Questions?".
 
+## Writing discipline
+
+The rules above decide what goes on a slide. These decide how it is worded —
+they are what separates a deck that reads like a researcher's argument from one
+that reads like generated filler.
+
+**Telegraphic language.** Drop articles, hedges, and framing clauses whenever
+meaning survives without them. Write `Cost down 23% (p < 0.01)`, not
+`Our study found that the intervention significantly reduced costs`. Packaging
+phrases — *we propose*, *it is worth noting*, *this demonstrates that*,
+*in order to* — are the clearest tell of machine-written slides. Cut them.
+
+**~40 words of body text per slide, hard.** Past that the slide is doing two
+jobs: split it, push the detail into the speaker notes, or move it to the
+appendix. Three to five bullets is typical; more than five is a warning.
+
+**One argument per talk.** The instinct is to present everything done. Pick the
+claim that can be carried convincingly in the time available; everything else
+is appendix material. A deck that covers three things well convinces of none.
+
+**Ghost deck test.** Extract every title, read them in sequence, ignore the
+bodies. They must tell the whole argument on their own. If the sequence is
+merely a list of topics, the titles are labels, not claims — rewrite before
+building the deck.
+
+**Flow test.** Each title should make the next feel like the natural next step.
+A slide that could sit anywhere in the deck without loss is either misplaced or
+unnecessary.
+
+**One exhibit per slide, annotated.** One chart, table, diagram, or equation
+block. Mark the decisive point on the figure itself — arrow, call-out,
+highlighted region, contrasting colour for the focal series. Two tests: cover
+the exhibit, and the title should still stand; cover the title, and the
+takeaway should still be obvious. Failing the first means the exhibit is
+unnecessary; failing the second means it needs annotation.
+
+**Self-sufficient slides.** Decks circulate as PDFs after the meeting. A slide
+whose point collapses without narration needs a stronger annotation or a
+sharper title.
+
+**Rebuild figures, don't screenshot them.** Paper figures carry print-sized
+fonts and captions that will not survive projection. Rebuild at presentation
+scale, axis labels 16pt or larger.
+
+**Bold and italics carry meaning, not decoration.** Bold for a key term on
+first use, inline labels (`Note:`, `Limitation:`), and the focal number.
+Italics for notation and titles. Nothing else.
+
+Adapted from *academic-pptx-skill* (Gabberflast, MIT), whose content rules draw
+on Minto's *Pyramid Principle* and Naegle (2021), "Ten simple rules for
+effective presentation slides," *PLOS Comput Biol*. Its visual standards
+(white background, single font) are deliberately not adopted — the lab template
+governs all layout and colour.
+
 ## What this means when generating slides
 
 - Do not invent results, metrics, or numbers. Ask, or leave the slot for the user.
