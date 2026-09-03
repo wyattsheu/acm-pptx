@@ -1,0 +1,238 @@
+{
+  "meta": {
+    "title": "Group Meeting",
+    "date": "2026.09.11",
+    "advisor": "Prof. Huang Ching-Chun",
+    "student": "Huai-Jen Hsu (Wyatt)"
+  },
+  "slides": [
+    {
+      "role": "paper_intro",
+      "title": "Task Definition",
+      "subtitle": "Monocular 3D head avatar synthesis",
+      "layout": "figure-bottom",
+      "bullets": [
+        {
+          "text": "Input: one casual monocular video - no rig, no calibration, no depth",
+          "level": 0
+        },
+        {
+          "text": "Output: animatable 3D head avatar, drivable by novel expressions and viewpoints",
+          "level": 0
+        },
+        {
+          "text": "Representation: 2D Gaussians anchored on a FLAME mesh, predicted in UV space",
+          "level": 0
+        }
+      ],
+      "figure": {
+        "src": "figs/fig1.png",
+        "caption": "Fig. 1  Input video (left) to avatar rendered at novel views and expressions (right).",
+        "source": "Kim et al., CVPR 2026"
+      },
+      "notes": "先把 task 講清楚再談方法。輸入只有一段手機拍的 monocular video，沒有 camera rig 也沒有 calibration，這是整篇論文所有困難的來源。輸出要能被新的 expression 跟 pose 驅動，所以不能只是一個靜態重建。表示法選 2DGS 貼在 FLAME mesh 上、在 UV space 預測，這個選擇後面 MGPM 的設計會一直用到。"
+    },
+    {
+      "role": "paper_intro",
+      "title": "Motivation",
+      "subtitle": "A single video cannot cover the appearance space",
+      "layout": "text-only",
+      "bullets": [
+        {
+          "text": "Unseen profile views, unseen expressions, occluded hair and mouth interior",
+          "level": 0
+        },
+        {
+          "text": "Overfitting to the video alone cannot render what was never observed",
+          "level": 0
+        },
+        {
+          "text": "Every monocular avatar method reduces to one question: where does the prior come from?",
+          "level": 0
+        }
+      ],
+      "callout": {
+        "label": "Key idea",
+        "text": "That question - not the 3D representation - is what separates all the prior work in this area."
+      },
+      "notes": "這頁是全篇的樞紐。單一段影片涵蓋不到的區域有三類：側面與背面、沒做過的表情、被遮住的頭髮與口腔內部。既然觀察不到，就只能靠 prior 補。所以整個 related work 不該用表示法來分類，而該用 prior 從哪來分類 - 這也是作者自己的分類方式。"
+    },
+    {
+      "role": "paper_related",
+      "title": "Related Work",
+      "subtitle": "Nobody has both good initialization and good supervision",
+      "layout": "text-only",
+      "matrix": {
+        "header": [
+          "Camp",
+          "Initialization",
+          "Supervision",
+          "Frame gen.",
+          "Key weakness"
+        ],
+        "rows": [
+          [
+            "(a) Overfitting",
+            "From scratch",
+            "Input frames",
+            "-",
+            "No prior, no generalization"
+          ],
+          [
+            "(b) 3D data prior",
+            "Learned",
+            "Input frames",
+            "-",
+            "Sparse supervision, overfits"
+          ],
+          [
+            "(c) 2D generative prior",
+            "From scratch",
+            "Input + generated",
+            "18 s / image",
+            "Slow + ID hallucination"
+          ],
+          [
+            "(d) ELITE (Ours)",
+            "Learned",
+            "Input + generated",
+            "0.3 s / image",
+            "-"
+          ]
+        ],
+        "highlight_row": 4
+      },
+      "callout": "ELITE = (b)'s initialization + (c)'s supervision, with a different generator.",
+      "notes": "三個陣營各缺一半。Overfitting 完全沒有 prior。3D data prior 有好的初始化，但 test time 的監督訊號還是只有那幾張輸入影格。2D generative prior 有生成的監督訊號，卻是從 pure noise 出發，慢而且會掉 identity。作者的切入點是這兩個有用的成分從來沒有被合起來用過。"
+    },
+    {
+      "role": "paper_method",
+      "title": "Proposed Method",
+      "subtitle": "MGPM maps UV maps plus driving signals to 2D Gaussians",
+      "layout": "figure-right",
+      "bullets": [
+        {
+          "text": "Input: canonical FLAME UV texture and geometry maps from photometric tracking",
+          "level": 0
+        },
+        {
+          "text": "Driving signals injected through FiLM layers",
+          "level": 0
+        },
+        {
+          "text": "U-Net backbone operating entirely in UV space",
+          "level": 0
+        },
+        {
+          "text": "Output: one 2D Gaussian per UV texel, 13 channels",
+          "level": 0
+        }
+      ],
+      "figure": {
+        "src": "figs/fig3.png",
+        "caption": "Fig. 3  MGPM takes mesh UV maps and driving signals, outputs a Gaussian avatar.",
+        "source": "Kim et al., CVPR 2026"
+      },
+      "annotations": [
+        {
+          "type": "box",
+          "at": [
+            0.02,
+            0.02,
+            0.3,
+            0.34
+          ],
+          "color": "C00000",
+          "dash": true
+        },
+        {
+          "type": "label",
+          "at": [
+            0.02,
+            0.38
+          ],
+          "text": "334 IDs x 1K frames x 16 views",
+          "color": "C00000"
+        }
+      ],
+      "notes": "MGPM 是唯一離線訓練的階段。輸入是 canonical FLAME 的 UV texture 與 geometry map，driving signal 透過 FiLM 注入，backbone 是完全在 UV space 上跑的 U-Net。輸出每個 UV texel 一顆 2D Gaussian，13 個 channel。這裡要強調的是一次 forward pass 就得到指定 pose 下的完整 avatar，不需要逐 identity 收斂。"
+    },
+    {
+      "role": "paper_results",
+      "title": "Experimental Results",
+      "subtitle": "20 min beats 400 min on identity preservation",
+      "layout": "text-only",
+      "matrix": {
+        "header": [
+          "Method",
+          "Duration",
+          "PSNR",
+          "LPIPS",
+          "CSIM"
+        ],
+        "rows": [
+          [
+            "FlashAvatar",
+            "10 min",
+            "20.875",
+            "0.1420",
+            "0.5823"
+          ],
+          [
+            "SplattingAvatar",
+            "15 min",
+            "24.838",
+            "0.0893",
+            "0.6406"
+          ],
+          [
+            "CAP4D",
+            "400 min",
+            "19.478",
+            "0.0992",
+            "0.7064"
+          ],
+          [
+            "ELITE (Ours)",
+            "20 min",
+            "25.220",
+            "0.0732",
+            "0.7396"
+          ]
+        ],
+        "highlight_row": 4
+      },
+      "callout": {
+        "label": "Evidence",
+        "text": "CSIM is the metric 2D-generative methods are supposed to win, and ELITE wins it 20x faster."
+      },
+      "notes": "自我重演在 INSTA identity 上的結果。PSNR、LPIPS、CSIM 三項最好，SSIM 略輸 SplattingAvatar。真正的重點是右邊兩欄一起看：跟 CAP4D 比是二十分之一的時間，而且贏在 identity 這個對方本來該強的指標上。我的詮釋是這說明監督影像本身的品質比監督數量更關鍵。"
+    },
+    {
+      "role": "paper_conclusion",
+      "title": "Conclusion",
+      "subtitle": "Combining priors needs no new architecture",
+      "layout": "text-only",
+      "bullets": [
+        {
+          "text": "Feed-forward prior turns test-time optimization into light fine-tuning",
+          "level": 0
+        },
+        {
+          "text": "Grounding generation in your own render buys identity and a single step",
+          "level": 0
+        },
+        {
+          "text": "One network, fine-tuned twice on two kinds of supervision",
+          "level": 0
+        },
+        {
+          "text": "Limitation (presenter): no ablation isolates enhancer from init",
+          "level": 0
+        }
+      ],
+      "callout": "Relevance to us: the render-then-enhance loop transfers to any test-time 3D fitting problem.",
+      "notes": "三個 takeaway 要留在螢幕上給 Q&A 用。作者自己承認的限制是依賴 FLAME tracking 的品質。我自己看到的問題是 ablation 沒有把 enhancer 跟更好的初始化分開，所以 20 分鐘這個數字有多少來自哪一邊其實不確定。可能被問到的問題：MGPM 沒看過的族群會怎樣、tracking 失敗時整條 pipeline 會不會崩。"
+    }
+  ]
+}

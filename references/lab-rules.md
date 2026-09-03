@@ -8,7 +8,7 @@ These govern content; `template-map.md` governs layout.
 
 | Area | Rule |
 |---|---|
-| Title | State the message or claim. A generic label such as "Results" is listed in the handbook as a failure mode. |
+| Title | The template's title band sits under a breadcrumb that already names the section, so leave the title as the section label — both reference decks do. The message goes in the red `subtitle` line and the bottom `callout`; a slide carrying neither is the failure mode the handbook means. |
 | Text | Short phrases, one main idea per slide. No paragraph-sized blocks. |
 | Font | Readable sans-serif, roughly 24pt or larger for core content, strong contrast. |
 | Figures | Crop, enlarge, annotate, simplify. Cite borrowed visuals. |
@@ -128,10 +128,10 @@ as a written summary — if it cannot be said out loud comfortably, rewrite it.
 claim that can be carried convincingly in the time available; everything else
 is appendix material. A deck that covers three things well convinces of none.
 
-**Ghost deck test.** Extract every title, read them in sequence, ignore the
-bodies. They must tell the whole argument on their own. If the sequence is
-merely a list of topics, the titles are labels, not claims — rewrite before
-building the deck.
+**Ghost deck test.** Extract every `subtitle` (the red claim line), read them
+in sequence, ignore titles and bodies. They must tell the whole argument on
+their own. If the sequence is merely a list of topics, they are labels, not
+claims — rewrite before building the deck.
 
 **Flow test.** Each title should make the next feel like the natural next step.
 A slide that could sit anywhere in the deck without loss is either misplaced or
@@ -166,5 +166,5 @@ governs all layout and colour.
 
 - Do not invent results, metrics, or numbers. Ask, or leave the slot for the user.
 - Do not pad a slide to fill it — whitespace is fine, a paragraph is not.
-- Turn every placeholder title into a claim before shipping.
+- Turn every placeholder claim line into a real claim before shipping.
 - Put the argument in the speaker notes, the claim on the slide.
