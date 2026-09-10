@@ -48,5 +48,5 @@ no research) this week, still show that summary slide and set every term to
 The role numbers above are positional. When the lab ships a new template,
 re-run `python scripts/thumbnail.py assets/acm_template.pptx tpl-thumbs`,
 compare against this table, and update both the table and `ROLES` in
-`scripts/build_from_outline.py`. Bump `template_version` in SKILL.md so a
+`scripts/build_from_outline.py`. Bump `metadata.template_version` in SKILL.md so a
 stale map is visible rather than silent.

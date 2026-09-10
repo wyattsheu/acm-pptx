@@ -1,0 +1,4 @@
+interface:
+  display_name: "ACM PPTX"
+  short_description: "Build ACM Lab presentations from the official template"
+  default_prompt: "Use $acm-pptx to create an ACM Lab presentation from my source material."

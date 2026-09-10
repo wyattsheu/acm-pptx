@@ -7,7 +7,7 @@ For a 20–25 min paper presentation at group meeting. Read this together with
 
 | Source | What it is for | Required |
 |---|---|---|
-| The original PDF | Understanding the argument. Claude reads a PDF as pages and can *see* the figures; a markdown conversion cannot show you what a teaser figure is doing. | **Yes** |
+| The original PDF | Understanding the argument. Read the PDF as pages and inspect the figures; a markdown conversion cannot show you what a teaser figure is doing. | **Yes** |
 | MinerU output dir | Assets. `*_content_list.json` gives every image/table block a `page_idx` (0-based) and a `bbox` normalised to 0–1000, with caption and footnote already paired, and converts formulas to LaTeX. | No |
 | Zotero export / annotations | Selection signal and metadata. The passages you highlighted are your own ranking of what matters; venue and year come from here. | No |
 

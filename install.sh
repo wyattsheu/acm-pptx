@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# Install acm-pptx as a Claude Code personal skill (available in every project).
+# Install acm-pptx as a Codex personal skill (available in every project).
 #
-#   ./install.sh              copy into ~/.claude/skills/acm-pptx
+#   ./install.sh              copy into ~/.codex/skills/acm-pptx
 #   ./install.sh --link       symlink instead, so edits here take effect at once
-#   ./install.sh --project    install into ./.claude/skills/acm-pptx
+#   ./install.sh --project    install into ./.codex/skills/acm-pptx
+#   ./install.sh --claude     install into ~/.claude/skills/acm-pptx
 #   ./install.sh --check      skip installing, just run the dependency + smoke test
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEST="$HOME/.claude/skills/acm-pptx"
+DEST="${CODEX_HOME:-$HOME/.codex}/skills/acm-pptx"
 MODE=copy
 DO_INSTALL=1
 
 for arg in "$@"; do
   case "$arg" in
     --link)    MODE=link ;;
-    --project) DEST="$PWD/.claude/skills/acm-pptx" ;;
+    --project) DEST="$PWD/.codex/skills/acm-pptx" ;;
+    --claude)  DEST="$HOME/.claude/skills/acm-pptx" ;;
     --check)   DO_INSTALL=0 ;;
     -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
@@ -35,8 +37,8 @@ if [ "$DO_INSTALL" = 1 ]; then
     ln -s "$SRC" "$DEST"
     echo "linked  $DEST -> $SRC"
   else
-    cp -R "$SRC" "$DEST"
-    rm -f "$DEST/install.sh.bak"
+    mkdir -p "$DEST"
+    (cd "$SRC" && tar --exclude='./.git' -cf - .) | (cd "$DEST" && tar -xf -)
     echo "copied  $SRC -> $DEST"
   fi
 else
@@ -46,7 +48,7 @@ fi
 echo
 echo "--- dependencies ---"
 MISSING=0
-for mod in pptx PIL defusedxml lxml; do
+for mod in pptx PIL matplotlib defusedxml lxml; do
   if "$PY" -c "import $mod" 2>/dev/null; then
     echo "  ok      python: $mod"
   else
@@ -69,7 +71,7 @@ fi
 if [ "$MISSING" = 1 ]; then
   cat <<'EOF'
 
-  pip install python-pptx Pillow defusedxml lxml "markitdown[pptx]"
+  pip install python-pptx Pillow matplotlib defusedxml lxml "markitdown[pptx]"
   macOS:  brew install poppler && brew install --cask libreoffice
   Debian: sudo apt install poppler-utils libreoffice
 EOF
@@ -91,4 +93,4 @@ cp "$DEST/assets/examples/outline.paper.example.json" "$TMP/outline.json"
 )
 echo
 echo "installed at: $DEST"
-echo 'in Claude Code, tell it: "用 acm-pptx 做這篇論文的 paper study 投影片"'
+echo 'in Codex, tell it: "用 $acm-pptx 做這篇論文的 paper study 投影片"'

@@ -1,9 +1,10 @@
 ---
 name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports, project/research updates, and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, 論文報告, paper study, or any .pptx/.potx that should follow ACM Lab format, and whenever a deck is being created, edited, or read for this lab. Also use it when the user hands you a paper PDF or a MinerU output directory and asks for slides, when they hand you an outline and ask for slides, or when they mention Prof. Huang Ching-Chun's lab meeting. Do not build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
-version: 2.0.0
-template_version: template_final.pptx (22 slides, 13.333in x 7.5in)
 license: Lab-internal use
+metadata:
+  version: "2.1.0"
+  template_version: "acm_template.pptx (22 slides, 13.333in x 7.5in)"
 ---
 
 # ACM Lab slide builder
@@ -34,14 +35,14 @@ rule in this file.
 skill folder.** Resolve the skill root once and prefix every script with it:
 
 ```bash
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/acm-pptx}"
-[ -f "$SKILL_DIR/SKILL.md" ] || SKILL_DIR=.claude/skills/acm-pptx
+SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/acm-pptx"
+[ -f "$SKILL_DIR/SKILL.md" ] || SKILL_DIR="$PWD/.codex/skills/acm-pptx"
+[ -f "$SKILL_DIR/SKILL.md" ] || SKILL_DIR="$PWD/acm-pptx"
 ```
 
-`CLAUDE_PLUGIN_ROOT` is set when this ships as a plugin; the fallbacks cover a
-personal skill (`~/.claude/skills/`) and a project skill (`.claude/skills/`).
-If none of the three exist, ask the user where they installed it rather than
-guessing.
+The fallbacks cover a Codex personal skill (`$CODEX_HOME/skills/` or
+`~/.codex/skills/`), a project skill (`.codex/skills/`), and a cloned repo in
+the working directory. If none exists, ask the user where they installed it.
 
 ```bash
 python "$SKILL_DIR/scripts/build_from_outline.py" --roles        # role table
@@ -169,7 +170,7 @@ on the conclusion slides overflows its box in the template itself. Leave it.
 
 ## Dependencies
 
-`python-pptx`, `markitdown[pptx]`, `Pillow`, `defusedxml`, `lxml` (pip) ·
+`python-pptx`, `markitdown[pptx]`, `Pillow`, `matplotlib`, `defusedxml`, `lxml` (pip) ·
 LibreOffice via `scripts/office/soffice.py` · `pdftoppm` (Poppler, also used by
 `figure.py`). MinerU is optional and never required.
 

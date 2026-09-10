@@ -1,6 +1,6 @@
 # acm-pptx
 
-ACM Lab (NYCU) PowerPoint 投影片生成工具 / Claude Skill。
+ACM Lab (NYCU) PowerPoint 投影片生成工具 / Codex 與 Claude Skill。
 
 `main` 分支永遠是最新版本；每個歷史版本都有對應的 git tag，方便在新版不好用時退回舊版。
 
@@ -40,6 +40,6 @@ git checkout v1.2.0
 git checkout main
 ```
 
-## 安裝為 Claude Skill
+## 安裝為 Codex Skill
 
 參考 repo 內的 `INSTALL.md`。

@@ -4,7 +4,7 @@ This is the **complete** skill, not a patch. Your existing `acm-pptx` files are
 all in here, with the paper-study track, the layout engine and the QA gate
 added on top. Nothing needs to be merged by hand.
 
-## Claude Code — available in every project
+## Codex — available in every project
 
 ```bash
 unzip acm-pptx-v2.zip
@@ -12,27 +12,28 @@ cd acm-pptx
 ./install.sh
 ```
 
-Copies to `~/.claude/skills/acm-pptx`, checks dependencies, then builds the
+Copies to `${CODEX_HOME:-~/.codex}/skills/acm-pptx`, checks dependencies, then builds the
 example deck and validates it. Expect `0 error(s)` and `All validations PASSED!`.
 
 | Flag | Effect |
 |---|---|
-| `./install.sh --link` | symlink instead of copy, so edits in this folder take effect immediately (Claude Code follows symlinks in the skills directory) |
-| `./install.sh --project` | install into `./.claude/skills/` for one repo only |
+| `./install.sh --link` | symlink instead of copy, so edits in this folder take effect immediately |
+| `./install.sh --project` | install into `./.codex/skills/` for one repo only |
+| `./install.sh --claude` | install into `~/.claude/skills/` for Claude Code |
 | `./install.sh --check` | no install, just dependency check + smoke test |
 
 An existing install is moved to `acm-pptx.bak.<timestamp>`, never overwritten.
 
-## claude.ai / the Claude app
+## Claude Code / claude.ai
 
-Upload `acm-pptx-v2.zip` under Settings → Capabilities → Skills. Code execution
+Run `./install.sh --claude` for Claude Code. For claude.ai, upload the skill archive under Settings → Capabilities → Skills. Code execution
 and file creation must be enabled — `compose.py` and `figure.py` both run code.
-The two installs are independent; installing in one does not affect the other.
+Codex and Claude installs are independent.
 
 ## Dependencies
 
 ```
-pip install python-pptx Pillow defusedxml lxml "markitdown[pptx]"
+pip install python-pptx Pillow matplotlib defusedxml lxml "markitdown[pptx]"
 macOS:   brew install poppler && brew install --cask libreoffice
 Debian:  sudo apt install poppler-utils libreoffice
 ```
@@ -88,7 +89,7 @@ never required.
 **Changed**
 
 - `SKILL.md` — paper track wired in; every command now resolves `$SKILL_DIR`
-  first, because in Claude Code the working directory is the user's project,
+  first, because in the coding agent the working directory is the user's project,
   not the skill folder.
 - `references/lab-rules.md` — **one rule was rewritten.** The old row said a
   generic title such as "Results" is a failure mode. Both reference decks use
@@ -127,6 +128,6 @@ Implemented but not in the test deck: `figure-left`, `figure-full`, and
 captions. Caption text is centred under the whole equation, not under the term
 it names -- aligning each caption to its own term is not implemented.
 
-Not built yet: the progress-report blueprint (Claude Code scanning a repo,
+Not built yet: the progress-report blueprint (the coding agent scanning a repo,
 diffing last week's todolist). `SKILL.md` currently routes 週報 to
 `lab-rules.md` §Weekly meeting content, which is what v1 did.
