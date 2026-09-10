@@ -118,44 +118,57 @@
         {
           "text": "Driving signals injected through FiLM layers",
           "level": 0
-        },
-        {
-          "text": "U-Net backbone operating entirely in UV space",
-          "level": 0
-        },
-        {
-          "text": "Output: one 2D Gaussian per UV texel, 13 channels",
-          "level": 0
         }
       ],
-      "figure": {
-        "src": "figs/fig3.png",
-        "caption": "Fig. 3  MGPM takes mesh UV maps and driving signals, outputs a Gaussian avatar.",
-        "source": "Kim et al., CVPR 2026"
+      "notes": "MGPM 是唯一離線訓練的階段。輸入是 canonical FLAME 的 UV texture 與 geometry map，driving signal 透過 FiLM 注入，backbone 是完全在 UV space 上跑的 U-Net。輸出每個 UV texel 一顆 2D Gaussian，13 個 channel。這裡要強調的是一次 forward pass 就得到指定 pose 下的完整 avatar，不需要逐 identity 收斂。",
+      "stage": "elite",
+      "equation": {
+        "src": "figs/eq1.png",
+        "label": "Eq. (1)  one forward pass gives a full avatar in the requested pose",
+        "where": [
+          "Mtex, Mgeo: canonical FLAME UV texture and geometry maps",
+          "Theta: expression code, jaw / eyes / neck poses, global transform"
+        ]
+      }
+    },
+    {
+      "role": "paper_method",
+      "title": "Proposed Method",
+      "subtitle": "One network, fine-tuned twice on two kinds of supervision",
+      "layout": "text-only",
+      "equation": {
+        "parts": [
+          [
+            "\\mathcal{F}_{\\varphi}",
+            "111111"
+          ],
+          [
+            "\\rightarrow",
+            "111111"
+          ],
+          [
+            "\\mathcal{F}_{\\varphi}^{*}",
+            "D2691E"
+          ],
+          [
+            "\\rightarrow",
+            "111111"
+          ],
+          [
+            "\\mathcal{F}_{\\varphi}^{\\star}",
+            "1F6FEB"
+          ]
+        ],
+        "captions": {
+          "D2691E": "adapted on 3 real frames - identity-specific",
+          "1F6FEB": "adapted on enhanced synthetic - final avatar"
+        }
       },
-      "annotations": [
-        {
-          "type": "box",
-          "at": [
-            0.02,
-            0.02,
-            0.3,
-            0.34
-          ],
-          "color": "C00000",
-          "dash": true
-        },
-        {
-          "type": "label",
-          "at": [
-            0.02,
-            0.38
-          ],
-          "text": "334 IDs x 1K frames x 16 views",
-          "color": "C00000"
-        }
-      ],
-      "notes": "MGPM 是唯一離線訓練的階段。輸入是 canonical FLAME 的 UV texture 與 geometry map，driving signal 透過 FiLM 注入，backbone 是完全在 UV space 上跑的 U-Net。輸出每個 UV texel 一顆 2D Gaussian，13 個 channel。這裡要強調的是一次 forward pass 就得到指定 pose 下的完整 avatar，不需要逐 identity 收斂。"
+      "callout": {
+        "label": "Key idea",
+        "text": "The synergy is not a new architecture; it is the same network, twice."
+      },
+      "notes": "這頁把兩階段適應拆開講。第一次用三張真實影格適應，得到 identity-specific 的先驗；第二次用 enhancer 清過的合成影像再適應一次。重點是兩次用的是同一個網路，沒有新架構，所以成本就是兩輪 fine-tune。"
     },
     {
       "role": "paper_results",
@@ -209,6 +222,18 @@
       "notes": "自我重演在 INSTA identity 上的結果。PSNR、LPIPS、CSIM 三項最好，SSIM 略輸 SplattingAvatar。真正的重點是右邊兩欄一起看：跟 CAP4D 比是二十分之一的時間，而且贏在 identity 這個對方本來該強的指標上。我的詮釋是這說明監督影像本身的品質比監督數量更關鍵。"
     },
     {
+      "role": "paper_results",
+      "title": "Experimental Results",
+      "subtitle": "ELITE keeps identity and sharp detail where the baselines blur or drift",
+      "layout": "assertion-evidence",
+      "figure": {
+        "src": "figs/fig1.png",
+        "caption": "Fig. 8a  Monocular self re-enactment, same driving signal.",
+        "source": "Kim et al., CVPR 2026"
+      },
+      "notes": "這頁只講一件事，所以不放條列。左邊是 ground truth，右邊依序是兩個 overfitting 基線、一個 3D prior、一個 2D generative prior，最右是 ELITE。要請聽眾看嘴部與顭髮邊緣，基線不是糊掉就是跑掉 identity。"
+    },
+    {
       "role": "paper_conclusion",
       "title": "Conclusion",
       "subtitle": "Combining priors needs no new architecture",
@@ -234,5 +259,29 @@
       "callout": "Relevance to us: the render-then-enhance loop transfers to any test-time 3D fitting problem.",
       "notes": "三個 takeaway 要留在螢幕上給 Q&A 用。作者自己承認的限制是依賴 FLAME tracking 的品質。我自己看到的問題是 ablation 沒有把 enhancer 跟更好的初始化分開，所以 20 分鐘這個數字有多少來自哪一邊其實不確定。可能被問到的問題：MGPM 沒看過的族群會怎樣、tracking 失敗時整條 pipeline 會不會崩。"
     }
-  ]
+  ],
+  "stage_figure": {
+    "src": "figs/fig1.png",
+    "caption": "Fig. 1  Pipeline; the boxed stage is the one on this slide.",
+    "stages": {
+      "input": [
+        0.02,
+        0.05,
+        0.2,
+        0.9
+      ],
+      "elite": [
+        0.24,
+        0.2,
+        0.14,
+        0.55
+      ],
+      "output": [
+        0.4,
+        0.05,
+        0.22,
+        0.9
+      ]
+    }
+  }
 }

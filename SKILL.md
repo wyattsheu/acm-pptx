@@ -50,6 +50,7 @@ python "$SKILL_DIR/scripts/build_from_outline.py" --roles        # role table
 python "$SKILL_DIR/scripts/build_from_outline.py" outline.json -o talk.pptx   # text
 python "$SKILL_DIR/scripts/compose.py" outline.json talk.pptx                 # figures, callouts, tables
 python "$SKILL_DIR/scripts/qa_check.py" outline.json talk.pptx                # gate — must exit 0
+python "$SKILL_DIR/scripts/qa_check.py" outline.json talk.pptx --review       # before handing it over
 python "$SKILL_DIR/scripts/office/validate.py" talk.pptx --original "$SKILL_DIR/assets/acm_template.pptx"
 python "$SKILL_DIR/scripts/office/soffice.py" --headless --convert-to pdf talk.pptx
 rm -f slide-*.jpg && pdftoppm -jpeg -r 150 talk.pdf slide
@@ -151,8 +152,11 @@ the deck.
 ## QA
 
 `qa_check.py` exits non-zero on: a content slide with no claim line, body text
-over the word cap, a borrowed figure with no source, and text that will not fit
-its box. Warnings — thin notes, a high text-only ratio, a claim that reads as a
+over the word cap, a borrowed figure with no source, text that will not fit its
+box, a method or results slide with no exhibit, and an assertion-evidence slide
+that carries bullets or no evidence. `--review` adds the claim sequence, a
+slide inventory and a rubric for content, design and coherence — the three
+things no mechanical check can see. Run it once before handing the deck over. Warnings — thin notes, a high text-only ratio, a claim that reads as a
 label — are judgement calls; the reference decks themselves trip some of them.
 
 Then look at every rendered page: text overflowing its box or the slide edge, a

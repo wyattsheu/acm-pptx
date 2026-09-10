@@ -59,7 +59,31 @@ never required.
   computed from the named layout, never written by hand.
 - `scripts/qa_check.py` — gate that exits non-zero.
 - `assets/examples/outline.paper.example.json` + `figs/` — working example.
+- `scripts/equation.py` -- rebuild an equation with one colour per term
+  (matplotlib mathtext, no TeX install). Used when the slide explains a
+  decomposition; quoted equations are cropped with `figure.py` instead.
 - `install.sh`.
+
+**Added after the first cut**
+
+- `equation` now takes either `src` (quote: crop + `where` list + annotations)
+  or `parts` (explain: rebuilt, one colour per term + `captions`). The old
+  plain-text form still loads.
+- `stage_figure` at the top of the outline plus `"stage": "<name>"` per slide,
+  for the overview figure both reference decks repeat on every method slide.
+- `"divider": true` draws the thin vertical rule between a text column and a
+  figure column. Off by default, and worth using only when the two columns are
+  genuinely in contrast (prior work vs ours); on an ordinary text-plus-figure
+  slide it just eats the gutter.
+- `"layout": "assertion-evidence"` — sentence headline at reading size, the
+  exhibit filling the rest, bullets rejected. The one slide structure with a
+  controlled experiment behind it (Alley / Garner, Penn State).
+- Per-role content schema in `qa_check.py`: a method or results slide with no
+  exhibit is now an error; related-work slides warn when they name no
+  limitation. Documented as a table in `slide-patterns.md`.
+- `qa_check.py --review` prints the claim sequence, a per-slide inventory, and
+  a content / design / coherence rubric for you to judge after looking at the
+  render.
 
 **Changed**
 
@@ -95,8 +119,13 @@ Not exercised, no MinerU output was available: `figure.py --mineru`. It reads
 prefers `_v2` when both exist — check it on your first real MinerU run. The
 `--page/--box` path is what produced both sample crops.
 
-Implemented but not in the test deck: `equation`, `figure-left`,
-`figure-full`, `arrow` annotations.
+Implemented but not in the test deck: `figure-left`, `figure-full`, and
+`arrow` annotations.
+
+`equation` was exercised both ways in the example: a crop from a PDF with a
+`where` list, and a rebuilt three-term expression with per-term colour and
+captions. Caption text is centred under the whole equation, not under the term
+it names -- aligning each caption to its own term is not implemented.
 
 Not built yet: the progress-report blueprint (Claude Code scanning a repo,
 diffing last week's todolist). `SKILL.md` currently routes 週報 to

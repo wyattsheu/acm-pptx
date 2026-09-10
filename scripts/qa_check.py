@@ -27,6 +27,19 @@ CLAIM_MIN_WORDS = 4
 # roles that are structural, not argument-bearing
 EXEMPT = {"cover", "summary", "paper_list", "project_summary", "research_summary"}
 
+# What each functional slide type must carry. PPTAgent's Stage I calls this a
+# content schema; here it is the machine-checkable half of slide-patterns.md.
+EXHIBIT_KEYS = ("figure", "matrix", "equation", "stage", "table")
+ROLE_SCHEMA = {
+    "paper_method":     {"exhibit": "error"},
+    "paper_results":    {"exhibit": "error"},
+    "paper_related":    {"exhibit": "warn", "callout": "warn"},
+    "paper_intro":      {"exhibit": "warn"},
+    "paper_conclusion": {"bullets": "warn"},
+    "project_results":  {"exhibit": "error"},
+    "research_results": {"exhibit": "error"},
+}
+
 NON_CLAIM = re.compile(
     r"^(results?|method|methods|introduction|conclusion|related work|"
     r"experiments?|ablation|overview|background|motivation)$", re.I)
@@ -100,7 +113,31 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
         if not any(spec.get(k) for k in ("figure", "matrix", "equation", "table")):
             text_only += 1
 
-        # 4. speaker notes
+        # 4. what this functional slide type must carry
+        schema = ROLE_SCHEMA.get(role, {})
+        for key, severity in schema.items():
+            if key == "exhibit":
+                ok = any(spec.get(k) for k in EXHIBIT_KEYS)
+                msg = (f"{tag}: a {role} slide with no exhibit - one figure, "
+                       f"matrix or equation per slide")
+            else:
+                ok = bool(spec.get(key))
+                msg = f"{tag}: {role} slide is missing `{key}`"
+            if not ok:
+                (errors if severity == "error" else warns).append(msg)
+
+        # assertion-evidence slides carry their evidence visually, never as bullets
+        if spec.get("layout") in ("assertion-evidence", "ae"):
+            if spec.get("bullets"):
+                errors.append(f"{tag}: assertion-evidence layout cannot take bullets "
+                              f"- the claim is the headline, the visual is the evidence")
+            if not any(spec.get(k) for k in EXHIBIT_KEYS):
+                errors.append(f"{tag}: assertion-evidence layout with no evidence")
+            if not spec.get("subtitle"):
+                errors.append(f"{tag}: assertion-evidence layout needs `subtitle` "
+                              f"- that is the assertion")
+
+        # 5. speaker notes
         notes = (spec.get("notes") or "").strip()
         if not notes:
             warns.append(f"{tag}: no speaker notes")
@@ -147,11 +184,59 @@ def check_deck(deck: Path) -> tuple[list[str], list[str]]:
     return errors, warns
 
 
+def ghost_deck(flat: list[dict]) -> str:
+    """Minto's horizontal logic: the claims alone must tell the whole story."""
+    lines = []
+    for i, spec in enumerate(flat, start=1):
+        if spec.get("role") in EXEMPT:
+            continue
+        claim = spec.get("subtitle") or ""
+        if not claim and spec.get("callout"):
+            c = spec["callout"]
+            claim = c["text"] if isinstance(c, dict) else c
+        lines.append(f"  {i:2}. {claim or '(none)'}")
+    return "\n".join(lines)
+
+
+def inventory(flat: list[dict]) -> str:
+    rows = []
+    for i, spec in enumerate(flat, start=1):
+        role = spec.get("role", "?")
+        if role in EXEMPT:
+            continue
+        ex = [k for k in EXHIBIT_KEYS if spec.get(k)] or ["-"]
+        rows.append(f"  {i:2}. {role:17} {spec.get('layout') or 'auto':18} "
+                    f"{'+'.join(ex):16} {words(bullet_text(spec)):3}w "
+                    f"{len((spec.get('notes') or '').strip()):4}c notes")
+    return "\n".join(rows)
+
+
+REVIEW_RUBRIC = """
+Now score the deck yourself on the three dimensions PPTEval uses, because none
+of the checks above can see any of them:
+
+  Content    Is each claim actually supported by the exhibit on its own slide?
+             Any number, baseline or dataset stated that the paper does not?
+  Design     Render the deck and look. Crowding, unreadable axis labels, a
+             figure that needed a tighter crop, an annotation covering the
+             thing it points at.
+  Coherence  Read the claim sequence above as a single paragraph. Does each
+             claim follow from the one before? Where does it jump?
+
+Name the three weakest slides and what you would change. Coherence is where
+the ablation in that work showed the largest gap, and it is the one thing a
+word count can never catch.
+"""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("outline")
     ap.add_argument("deck", nargs="?")
+    ap.add_argument("--review", action="store_true",
+                    help="also print the claim sequence, a slide inventory, and "
+                         "the rubric to judge content, design and coherence")
     a = ap.parse_args()
 
     outline = json.loads(Path(a.outline).read_text(encoding="utf-8"))
@@ -160,6 +245,14 @@ def main() -> None:
         e2, w2 = check_deck(Path(a.deck))
         errors += e2
         warns += w2
+
+    flat = flatten(outline)
+    if a.review:
+        print("CLAIM SEQUENCE (read this as one paragraph)")
+        print(ghost_deck(flat))
+        print("\nSLIDE INVENTORY")
+        print(inventory(flat))
+        print(REVIEW_RUBRIC)
 
     for w in warns:
         print(f"WARN  {w}")

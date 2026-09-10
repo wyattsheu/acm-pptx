@@ -46,6 +46,10 @@ CAPTION_H = 0.34
 GUTTER = 0.30
 LEFT, RIGHT = 0.92, 12.42          # body text column
 BLEED_L, BLEED_R = 0.62, 12.72     # figures may run wider than text
+STAGE_H = 1.60                     # the recurring pipeline strip, pinned top-right
+ASSERT = (0.92, 1.12, 11.50, 0.86)  # assertion-evidence: the sentence headline
+ASSERT_TOP = 2.10                   # evidence starts below it
+DIVIDER = RGBColor(0xC8, 0xCC, 0xD2)
 
 
 def regions(spec: dict) -> dict:
@@ -54,26 +58,39 @@ def regions(spec: dict) -> dict:
     bottom = CONTENT_BOTTOM - (CALLOUT_H + 0.18 if spec.get("callout") else 0)
     h = bottom - top
     w = RIGHT - LEFT
-    layout = spec.get("layout") or ("figure-bottom" if spec.get("figure") else "text-only")
+    layout = spec.get("layout")
+    if not layout:
+        if spec.get("figure"):
+            layout = "figure-bottom"
+        elif spec.get("stage"):
+            layout = "figure-right"   # the pipeline strip lives where a figure would
+        else:
+            layout = "text-only"
 
+    span = (top, bottom)
+    if layout in ("assertion-evidence", "ae"):
+        # Alley's structure: a sentence headline, then visual evidence, no bullets
+        return {"layout": "assertion-evidence", "span": (ASSERT_TOP, bottom),
+                "body": None,
+                "fig": (BLEED_L, ASSERT_TOP, BLEED_R - BLEED_L, bottom - ASSERT_TOP)}
     if layout == "text-only":
-        return {"layout": layout, "body": (LEFT, top, w, h), "fig": None}
+        return {"layout": layout, "span": span, "body": (LEFT, top, w, h), "fig": None}
     if layout == "figure-right":
         bw = w * 0.50
-        return {"layout": layout,
+        return {"layout": layout, "span": span,
                 "body": (LEFT, top, bw, h),
                 "fig": (LEFT + bw + GUTTER, top, BLEED_R - (LEFT + bw + GUTTER), h)}
     if layout == "figure-left":
         fw = w * 0.48
-        return {"layout": layout,
+        return {"layout": layout, "span": span,
                 "body": (BLEED_L + fw + GUTTER, top, RIGHT - (BLEED_L + fw + GUTTER), h),
                 "fig": (BLEED_L, top, fw, h)}
     if layout == "figure-full":
-        return {"layout": layout, "body": None,
+        return {"layout": layout, "span": span, "body": None,
                 "fig": (BLEED_L, top, BLEED_R - BLEED_L, h)}
     if layout == "figure-bottom":
         th = min(1.85, h * 0.38)
-        return {"layout": layout,
+        return {"layout": layout, "span": span,
                 "body": (LEFT, top, w, th),
                 "fig": (BLEED_L, top + th + 0.12, BLEED_R - BLEED_L, h - th - 0.12)}
     raise SystemExit(f"unknown layout {layout!r}")
@@ -151,6 +168,16 @@ def add_subtitle(slide, spec) -> None:
         place(title, TITLE)
         title.text_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
     textbox(slide, SUBTITLE, spec["subtitle"], 18, color=RED)
+
+
+def add_assertion(slide, spec) -> None:
+    """The claim, at reading size, in place of the small red subtitle."""
+    title = find_title(slide)
+    if title is not None:
+        place(title, TITLE)
+        title.text_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+    textbox(slide, ASSERT, spec["subtitle"], 24,
+            color=RGBColor(0x1A, 0x1A, 0x1A), bold=True, anchor=MSO_ANCHOR.TOP)
 
 
 def add_figure(slide, spec, box, *, vcenter=True) -> tuple[float, float, float, float] | None:
@@ -293,28 +320,111 @@ def _style_cell(cell, size, *, bold=False, color=None, align=PP_ALIGN.LEFT):
                 r.font.color.rgb = color
 
 
-def add_equation(slide, spec, box) -> None:
+def equation_height(eq: dict) -> float:
+    """Vertical band an equation needs, including its where-list and captions."""
+    h = 1.15
+    h += 0.24 * len(eq.get("where") or [])
+    h += 0.28 * len(eq.get("captions") or {})
+    if eq.get("label"):
+        h += 0.26
+    return min(h, 3.4)
+
+
+def _equation_image(eq: dict, outline_dir: Path, tag: str) -> Path:
+    """A cropped equation is used as given; a rebuilt one is rendered now."""
+    if eq.get("src"):
+        src = Path(eq["src"])
+        if not src.exists():
+            raise SystemExit(f"equation image not found: {src}")
+        return src
+    parts = eq.get("parts")
+    if not parts:
+        raise SystemExit("equation needs either `src` (quote it) or `parts` (explain it)")
+    import equation as equation_mod
+    pairs = [(p[0], (p[1] if len(p) > 1 else "111111").lstrip("#").upper())
+             for p in parts]
+    out = outline_dir / "figs" / f"_eq_{tag}.png"
+    return equation_mod.render(pairs, out)
+
+
+def add_equation(slide, spec, box, outline_dir: Path, tag: str) -> None:
     eq = spec["equation"]
-    text, label = (eq.get("text"), eq.get("label")) if isinstance(eq, dict) else (eq, None)
-    x, y, w, _ = box
-    band = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y),
-                                  Inches(w), Inches(0.78))
-    strip_style(band)
-    band.fill.solid()
-    band.fill.fore_color.rgb = BAND
-    band.line.fill.background()
-    band.shadow.inherit = False
-    tf = band.text_frame
-    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-    p = tf.paragraphs[0]
-    p.alignment = PP_ALIGN.CENTER
-    r = p.add_run()
-    r.text = text
-    r.font.size, r.font.italic = Pt(20), True
-    r.font.color.rgb = RGBColor(0x1A, 0x1A, 0x1A)
-    if label:
-        textbox(slide, (x, y + 0.82, w, 0.3), label, 11,
+    if isinstance(eq, str):                      # tolerate the old plain-text form
+        eq = {"parts": [[eq]]}
+    from PIL import Image
+
+    x, y, w, h = box
+    where = eq.get("where") or []
+    captions = eq.get("captions") or {}
+    below = 0.24 * len(where) + 0.28 * len(captions) + (0.26 if eq.get("label") else 0)
+
+    img = _equation_image(eq, outline_dir, tag)
+    iw, ih = Image.open(img).size
+    rect = fit((x, y, w, max(0.5, h - below)), iw, ih, vcenter=True)
+    slide.shapes.add_picture(str(img), Inches(rect[0]), Inches(rect[1]),
+                             Inches(rect[2]), Inches(rect[3]))
+    if eq.get("annotations"):
+        add_annotations(slide, {"annotations": eq["annotations"]}, rect)
+
+    cy = rect[1] + rect[3] + 0.05
+    if eq.get("label"):
+        textbox(slide, (x, cy, w, 0.24), eq["label"], 11,
                 color=GREY, italic=True, align=PP_ALIGN.CENTER)
+        cy += 0.26
+    for colour, text in captions.items():
+        textbox(slide, (x, cy, w, 0.26), text, 12,
+                color=RGBColor.from_string(colour.lstrip("#").upper()),
+                bold=True, align=PP_ALIGN.CENTER)
+        cy += 0.28
+    for line in where:
+        textbox(slide, (x + 0.10, cy, w - 0.10, 0.22), line, 12, color=GREY)
+        cy += 0.24
+
+
+# ---------------------------------------------------------------- recurring strip
+
+def add_stage(slide, spec, stage_figure, box) -> None:
+    """The method-overview figure, repeated, with a box on the stage being told.
+
+    Both reference decks do this on every method slide; naming the figure once
+    at the top of the outline keeps it out of every slide entry.
+    """
+    from PIL import Image
+
+    src = Path(stage_figure["src"])
+    if not src.exists():
+        raise SystemExit(f"stage_figure not found: {src}")
+    name = spec["stage"]
+    at = (stage_figure.get("stages") or {}).get(name)
+    if at is None:
+        raise SystemExit(f"stage {name!r} is not in stage_figure.stages")
+
+    x, y, w, _ = box
+    iw, ih = Image.open(src).size
+    rect = fit((x, y, w, STAGE_H), iw, ih, vcenter=False)
+    slide.shapes.add_picture(str(src), Inches(rect[0]), Inches(rect[1]),
+                             Inches(rect[2]), Inches(rect[3]))
+    add_annotations(slide, {"annotations": [
+        {"type": "box", "at": at, "color": stage_figure.get("color", "C00000")}]}, rect)
+    if stage_figure.get("caption"):
+        textbox(slide, (x, rect[1] + rect[3] + 0.04, w, 0.24),
+                stage_figure["caption"], 10, color=GREY, italic=True,
+                align=PP_ALIGN.CENTER)
+
+
+def add_divider(slide, reg) -> None:
+    """The thin rule between a figure column and its text, as in the lab decks."""
+    if reg["fig"] is None or reg["body"] is None:
+        return
+    bx, bw = reg["body"][0], reg["body"][2]
+    fx = reg["fig"][0]
+    x = (bx + bw + fx) / 2 if fx > bx else (fx + reg["fig"][2] + bx) / 2
+    top, bottom = reg["span"]
+    line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT,
+                                      Inches(x), Inches(top + 0.05),
+                                      Inches(x), Inches(bottom - 0.05))
+    line.line.color.rgb = DIVIDER
+    line.line.width = Pt(1.0)
 
 
 # ---------------------------------------------------------------- driver
@@ -329,7 +439,8 @@ def flatten(outline: dict) -> list[dict]:
     return flat
 
 
-VISUAL_KEYS = ("subtitle", "figure", "annotations", "callout", "matrix", "equation")
+VISUAL_KEYS = ("subtitle", "figure", "annotations", "callout", "matrix",
+               "equation", "stage", "divider")
 
 
 def compose(outline_path: Path, deck: Path, out: Path | None = None) -> Path:
@@ -342,17 +453,37 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None) -> Path:
             f"describes {len(flat)} - rebuild with build_from_outline.py first")
 
     touched = 0
-    for slide, spec in zip(prs.slides, flat):
+    stage_figure = outline.get("stage_figure")
+    outline_dir = outline_path.resolve().parent
+
+    for idx, (slide, spec) in enumerate(zip(prs.slides, flat), start=1):
         if not any(spec.get(k) for k in VISUAL_KEYS):
             continue
         touched += 1
         reg = regions(spec)
         if spec.get("subtitle"):
-            add_subtitle(slide, spec)
+            if reg["layout"] == "assertion-evidence":
+                add_assertion(slide, spec)
+            else:
+                add_subtitle(slide, spec)
+
+        # an equation shares the body column with the bullets, so claim its band
+        # before the body placeholder is resized -- that is what stops overlap
+        eq_box = None
+        if spec.get("equation") and reg["body"]:
+            bx, by, bw, bh = reg["body"]
+            eq = spec["equation"]
+            band = equation_height(eq if isinstance(eq, dict) else {})
+            if spec.get("bullets"):
+                band = min(band, bh - 0.9)
+                eq_box = (bx, by + bh - band, bw, band)
+                reg["body"] = (bx, by, bw, bh - band - 0.15)
+            else:
+                eq_box = (bx, by, bw, bh)
+                reg["body"] = (bx, by, 0.4, 0.3)
 
         body = find_body(slide, find_title(slide))
         if body is not None and not spec.get("bullets"):
-            # no bullets means the template's own placeholder prose is still there
             body.text_frame.clear()
         if body is not None:
             if reg["body"] is None:
@@ -361,20 +492,26 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None) -> Path:
             else:
                 place(body, reg["body"])
                 if reg["layout"] in ("figure-right", "figure-left"):
-                    # justified text in a half-width column opens rivers
                     for para in body.text_frame.paragraphs:
                         para.alignment = PP_ALIGN.LEFT
 
-        if spec.get("equation"):
-            bx, by, bw, bh = reg["body"] or (LEFT, CONTENT_TOP_PLAIN, RIGHT - LEFT, 1.0)
-            add_equation(slide, spec, (bx, by + bh - 1.1, bw, 1.1))
+        if eq_box:
+            add_equation(slide, spec, eq_box, outline_dir, str(idx))
         if spec.get("matrix"):
             add_matrix(slide, spec, reg["body"] or reg["fig"])
-        if spec.get("figure") and reg["fig"]:
+        if spec.get("stage") and reg["fig"]:
+            if not stage_figure:
+                raise SystemExit(f"slide {idx} sets `stage` but the outline has no "
+                                 f"top-level `stage_figure`")
+            add_stage(slide, spec, stage_figure, reg["fig"])
+        elif spec.get("figure") and reg["fig"]:
             rect = add_figure(slide, spec, reg["fig"],
-                              vcenter=reg["layout"] in ("figure-right", "figure-left"))
+                              vcenter=reg["layout"] in ("figure-right", "figure-left",
+                                                        "assertion-evidence"))
             if spec.get("annotations"):
                 add_annotations(slide, spec, rect)
+        if spec.get("divider"):
+            add_divider(slide, reg)
         if spec.get("callout"):
             add_callout(slide, spec)
 
