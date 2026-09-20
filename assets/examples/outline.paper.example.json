@@ -102,12 +102,11 @@
         ],
         "highlight_row": 4
       },
-      "callout": "ELITE = (b)'s initialization + (c)'s supervision, with a different generator.",
       "notes": "三個陣營各缺一半。Overfitting 完全沒有 prior。3D data prior 有好的初始化，但 test time 的監督訊號還是只有那幾張輸入影格。2D generative prior 有生成的監督訊號，卻是從 pure noise 出發，慢而且會掉 identity。作者的切入點是這兩個有用的成分從來沒有被合起來用過。"
     },
     {
       "role": "paper_method",
-      "title": "Proposed Method",
+      "title": "Multi-Granularity Prior Mapping (MGPM)",
       "subtitle": "MGPM maps UV maps plus driving signals to 2D Gaussians",
       "layout": "figure-right",
       "bullets": [
@@ -133,7 +132,7 @@
     },
     {
       "role": "paper_method",
-      "title": "Proposed Method",
+      "title": "Two-Stage Fine-Tuning",
       "subtitle": "One network, fine-tuned twice on two kinds of supervision",
       "layout": "text-only",
       "equation": {
@@ -163,10 +162,6 @@
           "D2691E": "adapted on 3 real frames - identity-specific",
           "1F6FEB": "adapted on enhanced synthetic - final avatar"
         }
-      },
-      "callout": {
-        "label": "Key idea",
-        "text": "The synergy is not a new architecture; it is the same network, twice."
       },
       "notes": "這頁把兩階段適應拆開講。第一次用三張真實影格適應，得到 identity-specific 的先驗；第二次用 enhancer 清過的合成影像再適應一次。重點是兩次用的是同一個網路，沒有新架構，所以成本就是兩輪 fine-tune。"
     },
@@ -215,10 +210,6 @@
         ],
         "highlight_row": 4
       },
-      "callout": {
-        "label": "Evidence",
-        "text": "CSIM is the metric 2D-generative methods are supposed to win, and ELITE wins it 20x faster."
-      },
       "notes": "自我重演在 INSTA identity 上的結果。PSNR、LPIPS、CSIM 三項最好，SSIM 略輸 SplattingAvatar。真正的重點是右邊兩欄一起看：跟 CAP4D 比是二十分之一的時間，而且贏在 identity 這個對方本來該強的指標上。我的詮釋是這說明監督影像本身的品質比監督數量更關鍵。"
     },
     {
@@ -256,7 +247,6 @@
           "level": 0
         }
       ],
-      "callout": "Relevance to us: the render-then-enhance loop transfers to any test-time 3D fitting problem.",
       "notes": "三個 takeaway 要留在螢幕上給 Q&A 用。作者自己承認的限制是依賴 FLAME tracking 的品質。我自己看到的問題是 ablation 沒有把 enhancer 跟更好的初始化分開，所以 20 分鐘這個數字有多少來自哪一邊其實不確定。可能被問到的問題：MGPM 沒看過的族群會怎樣、tracking 失敗時整條 pipeline 會不會崩。"
     }
   ],

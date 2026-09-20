@@ -21,7 +21,8 @@ from pptx.util import Emu, Pt
 
 BODY_WORD_CAP = 40          # lab-rules.md: "~40 words of body text per slide, hard"
 NOTES_MIN = 80              # WARN only: TADSR leaves results-slide notes empty
-TEXT_ONLY_MAX = 0.15        # WARN only: measured 8% (ELITE) and 12% (TADSR)
+TEXT_ONLY_MAX = 0.25          # WARN only: SliderEdit sits at 24% (4/17)
+CALLOUT_MAX = 0.15            # WARN only: both reference decks use zero
 CLAIM_MIN_WORDS = 4
 
 # roles that are structural, not argument-bearing
@@ -73,6 +74,7 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
     errors, warns = [], []
     content = [s for s in flat if s.get("role") not in EXEMPT]
     text_only = 0
+    n_callout = 0
 
     for i, spec in enumerate(flat, start=1):
         role = spec.get("role", "?")
@@ -80,21 +82,28 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
         if role in EXEMPT:
             continue
 
-        # 1. the claim must exist somewhere -- subtitle or callout, not the title
+        # 1. the slide must say something -- a specific title is enough on its
+        # own. Both reference decks carry the argument in the title
+        # (`Time-Aware Encoder (TAE)`, `Continuous Control by Scaling LoRA`);
+        # SliderEdit uses no red line and no box on any of its 17 slides.
+        title = (spec.get("title") or "").strip()
         claim = spec.get("subtitle") or ""
         if not claim and isinstance(spec.get("callout"), dict):
             claim = spec["callout"].get("text", "")
         elif not claim and isinstance(spec.get("callout"), str):
             claim = spec["callout"]
-        if not claim.strip():
-            errors.append(f"{tag}: no claim line - add `subtitle` or `callout`. "
-                          f"The template's titles are labels; the argument lives "
-                          f"in the red line and the bottom box.")
-        elif len(claim.split()) < CLAIM_MIN_WORDS:
+        claim = claim.strip()
+
+        generic = bool(NON_CLAIM.match(title)) or not title
+        if generic and not claim:
+            errors.append(f"{tag}: generic title {title!r} says nothing and there "
+                          f"is no `subtitle` to carry the point - name the method, "
+                          f"or state the finding in a subtitle")
+        elif claim and len(claim.split()) < CLAIM_MIN_WORDS:
             warns.append(f"{tag}: claim {claim!r} reads as a label, not a statement")
 
-        if NON_CLAIM.match((spec.get("title") or "").strip()) and not claim:
-            errors.append(f"{tag}: generic title {spec.get('title')!r} with no claim line")
+        if spec.get("callout"):
+            n_callout += 1
 
         # 2. body word ceiling -- slide body only, never captions or notes
         n = words(bullet_text(spec))
@@ -143,6 +152,11 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
             warns.append(f"{tag}: no speaker notes")
         elif len(notes) < NOTES_MIN:
             warns.append(f"{tag}: notes are {len(notes)} chars - thin")
+
+    if content and n_callout > max(2, round(len(content) * CALLOUT_MAX)):
+        warns.append(f"{n_callout} callout boxes across {len(content)} content slides "
+                     f"- TADSR uses 0 and SliderEdit uses 0. A box on every slide "
+                     f"reads as a tic; keep it for the one or two that pivot.")
 
     if content:
         ratio = text_only / len(content)
@@ -194,7 +208,13 @@ def ghost_deck(flat: list[dict]) -> str:
         if not claim and spec.get("callout"):
             c = spec["callout"]
             claim = c["text"] if isinstance(c, dict) else c
-        lines.append(f"  {i:2}. {claim or '(none)'}")
+        # the title is the primary claim carrier; fall back to it, and mark a
+        # bare section label so a topic list is visible at a glance
+        if not claim:
+            title = (spec.get("title") or "").strip()
+            claim = f"[title] {title}" if title and not NON_CLAIM.match(title) \
+                else f"[label] {title or '(none)'}"
+        lines.append(f"  {i:2}. {claim}")
     return "\n".join(lines)
 
 

@@ -12,7 +12,8 @@ ACM Lab (NYCU) PowerPoint 投影片生成工具 / Codex 與 Claude Skill。
 | `v1.1.0` | lab-rules / outline-schema 更新 |
 | `v1.2.0` | SKILL.md 與規則微調 |
 | `v2.0.0` | 新增 paper-study 支援、blueprint-paper 等 references |
-| `v2.1.0` | 目前最新版 |
+| `v2.1.0` | 新增 `qa_check --review`、Codex skill 支援 |
+| `v2.2.0` | 目前最新版。紅框改為稀用、標題承載論點；QA 只渲染需要看的頁面；輸出只留一份 .pptx |
 
 ## 使用方式
 

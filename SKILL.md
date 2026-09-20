@@ -3,7 +3,7 @@ name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports, project/research updates, and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, 論文報告, paper study, or any .pptx/.potx that should follow ACM Lab format, and whenever a deck is being created, edited, or read for this lab. Also use it when the user hands you a paper PDF or a MinerU output directory and asks for slides, when they hand you an outline and ask for slides, or when they mention Prof. Huang Ching-Chun's lab meeting. Do not build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
 license: Lab-internal use
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   template_version: "acm_template.pptx (22 slides, 13.333in x 7.5in)"
 ---
 
@@ -48,14 +48,31 @@ the working directory. If none exists, ask the user where they installed it.
 python "$SKILL_DIR/scripts/build_from_outline.py" --roles        # role table
 # write outline.json  (schema: references/outline-schema.md
 #                      + visual fields: references/slide-patterns.md)
-python "$SKILL_DIR/scripts/build_from_outline.py" outline.json -o talk.pptx   # text
-python "$SKILL_DIR/scripts/compose.py" outline.json talk.pptx                 # figures, callouts, tables
-python "$SKILL_DIR/scripts/qa_check.py" outline.json talk.pptx                # gate — must exit 0
-python "$SKILL_DIR/scripts/qa_check.py" outline.json talk.pptx --review       # before handing it over
-python "$SKILL_DIR/scripts/office/validate.py" talk.pptx --original "$SKILL_DIR/assets/acm_template.pptx"
-python "$SKILL_DIR/scripts/office/soffice.py" --headless --convert-to pdf talk.pptx
-rm -f slide-*.jpg && pdftoppm -jpeg -r 150 talk.pdf slide
+DECK=2026-09-18-Report.pptx   # date + what it is; see naming below
+python "$SKILL_DIR/scripts/build_from_outline.py" outline.json -o "$DECK"   # text
+python "$SKILL_DIR/scripts/compose.py" outline.json "$DECK"                 # figures, tables
+python "$SKILL_DIR/scripts/render_qa.py" outline.json "$DECK"               # gate + render what needs eyes
+python "$SKILL_DIR/scripts/qa_check.py" outline.json "$DECK" --review       # before handing it over
+python "$SKILL_DIR/scripts/office/validate.py" "$DECK" --original "$SKILL_DIR/assets/acm_template.pptx"
 ```
+
+## What lands on disk
+
+**One `.pptx` in the working directory, and nothing else.** Name it
+`YYYY-MM-DD-<what>.pptx` — the date it is presented, then what it is:
+`2026-09-18-Report.pptx`, `2026-09-18-GM.pptx`, `2026-09-18-TADSR.pptx`.
+`Report` is the safe default when nothing more specific fits. What matters is
+that the date leads and the name says something; never `talk.pptx`,
+`output.pptx`, `presentation.pptx`, or `slides.pptx`. If the user gave a name,
+use theirs and do not rename it.
+
+`outline.json` is a working file: keep it, it is how edits are made, but do not
+present it as a deliverable. Everything else — PDFs, rendered PNGs, scratch
+folders — goes to a temp dir via `render_qa.py` and never to the user's
+directory. Do not convert the deck to PDF unless the user asks for a PDF. Do not
+leave `slide-*.png` behind. Do not create a project folder, a `build/` dir, or a
+`figs/` tree for a deck with two figures — put them next to the deck or pass
+absolute paths.
 
 `build_from_outline.py` finds its own template, so `--template` is only needed
 when the lab ships a revised one. Figures named in `outline.json` are resolved
@@ -70,8 +87,9 @@ region from the named layout, which is why nothing overlaps.
 `--original` on validate is required: the lab template has pre-existing XSD
 quirks, and baselining against it keeps a real regression from hiding.
 
-Render QA at **150 dpi or higher**. At 100 dpi, JPEG artifacts look like stray
-shapes and you will chase bugs that do not exist.
+**Rebuilding the deck is free; looking at it is not.** These scripts are local
+compute, so never hand-patch a `.pptx` to dodge a rebuild. A rendered slide is
+~1600 tokens of vision input, and that is where a session's budget goes.
 
 ## Before you write the outline
 
@@ -81,10 +99,11 @@ shapes and you will chase bugs that do not exist.
 2. **Get the outline confirmed before building anything over 10 slides.**
    Titles, subtitles, and which exhibit sits on each slide. A paper talk is
    always over 10 slides, so it is always confirmed first.
-3. **Ghost deck test on the subtitles.** The template's titles are section
-   labels and both reference decks leave them that way. Read the `subtitle`
-   lines in sequence — they must carry the whole argument alone. If they read
-   as a list of topics, fix the outline before building.
+3. **Ghost deck test on the titles.** Read the `title` lines in sequence, with
+   a `subtitle` standing in wherever the title is a bare section label. They
+   must carry the whole argument alone. If they read as a list of topics —
+   `Method`, `Results`, `Conclusion` — the titles are not yet doing their job.
+   `qa_check.py --review` prints this sequence for you.
 
 ## Choosing roles
 
@@ -103,9 +122,19 @@ Roles repeat by design — the breadcrumb stays on the right section.
 
 ## Writing the content
 
-- **The claim goes in `subtitle` and `callout`, not the title.** One red line
-  under the section label, one boxed sentence at the bottom. Every content
-  slide gets at least one of the two; `qa_check.py` enforces it.
+- **The claim goes in the title.** Name the method, the mechanism or the
+  finding: `Time-Aware Encoder (TAE)`, `Continuous Control by Scaling LoRA` —
+  not `Method`, not `Approach`. Reuse one title across consecutive slides when
+  the point continues; both reference decks do. A generic section label is fine
+  on a results slide, where the figure is the argument, and otherwise needs a
+  `subtitle` under it to carry the point.
+- **Do not put a red box on every slide.** Across the two 2026 reference decks
+  — 34 slides — there are zero callout boxes. Reserve `callout` for the one or
+  two slides where the talk turns, such as the research question between
+  motivation and contribution. For emphasis everywhere else use an inline red
+  run inside a sentence, the way TADSR marks `distribution-to-distribution
+  matching`. A box on every slide reads as a tic and drains the two that
+  deserve one.
 - **Telegraphic wording.** `Cost down 23% (p < 0.01)`, never `Our results
   demonstrate that costs were significantly reduced`. But never compress away
   the baseline a number beats, its units and dataset, or an acronym's first
@@ -154,16 +183,33 @@ the deck.
 
 `qa_check.py` exits non-zero on: a content slide with no claim line, body text
 over the word cap, a borrowed figure with no source, text that will not fit its
-box, a method or results slide with no exhibit, and an assertion-evidence slide
-that carries bullets or no evidence. `--review` adds the claim sequence, a
+box, a method or results slide with no exhibit, an assertion-evidence slide
+that carries bullets or no evidence, and a generic title with nothing under it
+to carry the point. It also warns when callouts pile up past a couple. `--review` adds the claim sequence, a
 slide inventory and a rubric for content, design and coherence — the three
 things no mechanical check can see. Run it once before handing the deck over. Warnings — thin notes, a high text-only ratio, a claim that reads as a
 label — are judgement calls; the reference decks themselves trip some of them.
 
-Then look at every rendered page: text overflowing its box or the slide edge, a
-title that wrapped and now collides with the subtitle, leftover `XXX` /
-`Ur Name` / `20XX`, table rows that should have been blanked, a breadcrumb whose
-bold segment does not match the slide's role.
+What geometry cannot see is what the render is for: a title that wrapped and now
+collides with the subtitle, leftover `XXX` / `Ur Name` / `20XX`, table rows that
+should have been blanked, a breadcrumb whose bold segment does not match the
+slide's role. `render_qa.py` covers this with the flagged slides plus a sample
+that always includes the cover, rendering into a temp dir.
+
+Work the loop this way:
+
+1. `render_qa.py` — fix every error it reports, rebuild, re-run. Do not open an
+   image while the exit code is non-zero.
+2. Look only at the files it printed.
+3. Fix what you saw by **editing `outline.json` in place** — a targeted string
+   replacement on the one slide. Never re-emit the whole outline; at 25 slides
+   that is ~10k output tokens to change one callout.
+4. Rebuild, then `render_qa.py --pages 7,12` on just the slides you touched.
+5. Once, at the end: `render_qa.py --all` plus `qa_check.py --review`.
+
+`--dpi` defaults to 110, legible down to figure captions. Going above it buys no
+detail: a 13.333in slide is downscaled to 1568px on its long edge regardless, so
+150 dpi and 300 dpi are the identical image at the identical price.
 
 One quirk is inherited, not yours: the `Todolist & Suggestion from Prof.` label
 on the conclusion slides overflows its box in the template itself. Leave it.

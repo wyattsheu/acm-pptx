@@ -52,14 +52,43 @@ presenter's own annotations — *only an increase in sharpness*, *recovers a mor
 realistic parrot image*, *ts larger → kernel size larger → more blur* — not
 anything the paper wrote.
 
+## C. SliderEdit (instruction-based image editing), 17 slides
+
+Measured on the file itself, 2026-09-18:
+
+| | red text runs | filled callout boxes | layout |
+|---|---|---|---|
+| every slide, s1–s17 | **0** | **0** | title + bullets left, figure right |
+
+Not one red run and not one coloured box in the whole deck. The argument is
+carried by the **title**: `Partial Prompt Suppression (PPS)`,
+`Continuous Control by Scaling LoRA`, `Selective Token LoRA (STLoRA & GSTLoRA)`.
+Consecutive slides reuse one title (`Quantitative` ×2, `Qualitative` ×2,
+`Background, Motivation, Objectives` ×2) — a repeated title means continuation,
+not a mistake. Four of seventeen slides carry no exhibit at all.
+
+TADSR, measured the same way: red text on **5 of 17 slides** (s2, s3, s4, s5,
+s16), and every instance is an inline run emphasising a term inside a sentence —
+`Real-World Image Super-Resolution`, `distribution-to-distribution matching` —
+never a box. The only filled shapes in the deck are the three coloured dots on
+the conclusion slide. The blue rounded rectangle on s4–s5 holds the research
+question and appears exactly twice, at the pivot from motivation to
+contribution.
+
 ## What the reference decks tell us about the rules
 
-- Section-label titles are **fine** here. Both decks use `Ablation Study`,
-  `Quantitative Comparisons`, `Task Definition`. The claim lives in the red
-  subtitle and the callout. Judge the ghost deck on those.
+- **The claim goes in the title.** Name the method, the mechanism, or the
+  finding: `Time-Aware Encoder (TAE)`, not `Method`. A generic section label is
+  only acceptable when a subtitle underneath carries the point.
+- **A red line on every slide is wrong.** Between them the two 2026 decks use
+  zero callout boxes across 34 slides. Reserve the box for the one or two slides
+  where the talk turns, and use inline red runs — a coloured phrase inside a
+  sentence — for emphasis everywhere else.
+- Section-label titles do appear (`Ablation Study`, `Quantitative Comparisons`)
+  and are fine on results slides, where the figure is the argument.
 - The 40-word body cap is real but is measured on **body text only**. TADSR
   s4 and s16 exceed it and are the two most crowded slides in that deck.
 - Speaker notes are full on conceptual slides and **empty on results slides**
   in TADSR. Thin notes are a warning worth looking at, not an error.
-- Text-only slides run 8% (ELITE) to 12% (TADSR). A deck above ~15% is drifting
-  back into an outline.
+- Text-only slides: 8% (ELITE), 12% (TADSR), 24% (SliderEdit). The ceiling is
+  softer than it looked — a deck is drifting only past ~25%.
