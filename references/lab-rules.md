@@ -14,7 +14,7 @@ These govern content; `template-map.md` governs layout.
 | Figures | Crop, enlarge, annotate, simplify. Cite borrowed visuals. |
 | Tables | Only decisive rows and columns; highlight the values being discussed. |
 | Colour | Never rely on colour alone — add labels, shapes, line styles. Caption videos; describe key visuals verbally. |
-| Animation | Only to control the order of explanation. Embed video locally and test it. |
+| Animation | Only to control the order of explanation. Embed video locally and test it — `scripts/video.py prep` makes a clip PowerPoint can actually decode, and `compose.py` embeds it; never link to a file on your laptop. |
 | Delivery | Face the audience, speak slightly slower, pause after key claims, signpost, do not read the slides. |
 
 ## Weekly meeting content

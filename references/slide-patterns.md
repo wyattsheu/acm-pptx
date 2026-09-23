@@ -22,6 +22,19 @@ is avoided.
     "source": "Kim et al., CVPR 2026"      // required for borrowed figures
   },
 
+  // or a VIDEO, in the same slot -- a figure and a video cannot share a slide
+  "video": {
+    "src": "figs/demo.mp4",                 // H.264/AAC mp4; see below
+    "caption": "Demo  tracking at 30 fps, uncut",
+    "source": "ours",                       // same rule as a figure
+    "poster": "figs/demo-still.png",        // optional; a frame is pulled if absent
+    "poster_at": "0:04",                    // which frame, if you pull one
+    "autoplay": true,                       // default: play on click
+    "loop": true,
+    "mute": false, "volume": 60,            // volume is a percentage
+    "badge": true                           // the "▶ 0:12" marker, on by default
+  },
+
   "annotations": [                          // coordinates are FRACTIONS OF THE
     {"type": "box",   "at": [0.02, 0.02, 0.30, 0.34],                    // PICTURE,
      "color": "C00000", "dash": true},                                    // so they
@@ -60,8 +73,44 @@ is avoided.
 }
 ```
 
-`callout` also accepts a bare string. `figure` also accepts a bare path, but
-then it has no caption and no source, so `qa_check.py` will complain.
+`callout` also accepts a bare string. `figure` and `video` also accept a bare
+path, but then they have no caption and no source, so `qa_check.py` will
+complain.
+
+## Video
+
+A video occupies the figure slot and obeys the same layouts. With `bullets` it
+defaults to `figure-right`; without them, to `figure-full`.
+
+**Prepare the file before you name it.** PowerPoint decodes H.264 video with
+AAC audio in an `.mp4` or `.mov` and nothing else. Screen recorders and paper
+supplementary sites hand you HEVC, VP9, `.mkv` and `.webm`, and all of those
+open as a black rectangle in the meeting — with no error when the deck is
+built. So:
+
+```bash
+python "$SKILL_DIR/scripts/video.py" probe capture.mov          # is it playable?
+python "$SKILL_DIR/scripts/video.py" prep capture.mov -o figs/demo.mp4 --clip 0:03-0:18
+```
+
+`prep` re-encodes to H.264 High / yuv420p / AAC, caps the width at 1920, moves
+the index to the front, and trims. `compose.py` refuses to embed a file that
+would not play and prints that exact command, so this cannot reach a meeting
+by accident.
+
+Three more things follow from the format, not from taste:
+
+- **Trim to fifteen seconds.** Nobody watches a minute of demo in a lab
+  meeting, and every second is embedded in the file you email.
+- **Autoplay the one clip the slide is about**, and loop it — you keep talking
+  instead of hunting for the play button. Leave everything else click-to-play.
+- **The deck must be presented from PowerPoint.** Export it to PDF and the
+  video is gone. Say so when you hand the file over.
+
+A poster frame is pulled automatically (10% in, past the fade-up) into a temp
+dir; name `poster` yourself when the automatic frame is uninformative. There is
+no play button in a static render, which is why `compose.py` draws the small
+`▶ 0:12` badge in the corner.
 
 ## Quote an equation, or rebuild it
 
@@ -114,6 +163,8 @@ it once keeps it out of every slide entry.
 | `figure-full` | cleared | whole content region | qualitative comparison grids |
 | `assertion-evidence` | forbidden | whole content region | a slide that makes exactly one point |
 
+A `video` is placed by the same table; read the "Figure" column as "exhibit".
+
 Adding a `callout` automatically shortens the content region by 0.96in.
 Adding a `subtitle` pushes it down 0.06in. You do not adjust for either.
 
@@ -151,7 +202,7 @@ The machine-checkable half of this file. `qa_check.py` applies it by role:
 
 | role | required | severity |
 |---|---|---|
-| `paper_method`, `paper_results` | an exhibit (figure, matrix, equation or stage) | error |
+| `paper_method`, `paper_results` | an exhibit (figure, video, matrix, equation or stage) | error |
 | `project_results`, `research_results` | an exhibit | error |
 | `paper_related` | an exhibit, and a `callout` naming the limitation | warning |
 | `paper_intro` | an exhibit | warning |
@@ -187,6 +238,12 @@ after looking at the render; the script only lays the evidence out.
   bullets beside or below it. One equation per slide.
 - **Qualitative results** → `figure-full`, and crop hard. A grid of eight
   methods is unreadable projected; crop to the three that matter.
+- **Something that only reads as motion** — tracking jitter, temporal
+  flicker, a robot actually completing the task → `video`, trimmed to the
+  seconds that show it, autoplaying and looping. A still cannot carry a
+  temporal claim, and a GIF pasted as an image will not animate in PowerPoint.
+  Everything else stays a figure: a video of a static result is slower to read
+  and costs megabytes.
 
 ## Annotation conventions
 

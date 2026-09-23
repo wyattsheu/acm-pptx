@@ -40,6 +40,16 @@ lets the plain skill hand work off to the executable one.
       "notes": "Speaker notes, in 中文, full sentences, 3-6 per content slide, no length limit. The argument, the numbers you'll quote and their baseline, the questions you expect."
     },
     {
+      "role": "project_results",
+      "title": "Tracking holds through the fast turn",
+      "video": {                                    // exhibits: see slide-patterns.md
+        "src": "figs/demo.mp4",                     // H.264 mp4; video.py prep makes one
+        "caption": "Demo  uncut capture, 12s",
+        "source": "ours",
+        "autoplay": true, "loop": true
+      }
+    },
+    {
       "role": "project_conclusion",
       "title": "Conclusion",
       "table": ["first todo", "second todo"]        // numbered table, rest blanked
@@ -61,6 +71,7 @@ lets the plain skill hand work off to the executable one.
   than guessing.
 - `bullets` and `table` are mutually exclusive on a slide — a table role
   ignores bullets.
+- `figure` and `video` are mutually exclusive too: one exhibit per slide.
 - `level` maps onto the template's own indent tiers, discovered per slide from
   the template's `marL` values. A level above the deepest available tier
   clamps to the deepest. Never fake indentation with spaces or dashes.

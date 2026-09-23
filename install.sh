@@ -64,6 +64,14 @@ for bin in pdftoppm soffice; do
     MISSING=1
   fi
 done
+for bin in ffmpeg ffprobe; do
+  if command -v "$bin" >/dev/null 2>&1; then
+    echo "  ok      binary: $bin"
+  else
+    echo "  absent  binary: $bin  (needed to embed video: poster frames and"
+    echo "                        the H.264 transcode PowerPoint requires)"
+  fi
+done
 if ! "$PY" -c "import markitdown" 2>/dev/null; then
   echo "  absent  python: markitdown  (only needed to read existing decks)"
 fi
@@ -72,8 +80,8 @@ if [ "$MISSING" = 1 ]; then
   cat <<'EOF'
 
   pip install python-pptx Pillow matplotlib defusedxml lxml "markitdown[pptx]"
-  macOS:  brew install poppler && brew install --cask libreoffice
-  Debian: sudo apt install poppler-utils libreoffice
+  macOS:  brew install poppler ffmpeg && brew install --cask libreoffice
+  Debian: sudo apt install poppler-utils ffmpeg libreoffice
 EOF
 fi
 
@@ -82,15 +90,26 @@ echo "--- smoke test ---"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cp -R "$DEST/assets/examples/figs" "$TMP/figs"
-cp "$DEST/assets/examples/outline.paper.example.json" "$TMP/outline.json"
-(
-  cd "$TMP"
-  "$PY" "$DEST/scripts/build_from_outline.py" outline.json -o talk.pptx
-  "$PY" "$DEST/scripts/compose.py" outline.json talk.pptx
-  "$PY" "$DEST/scripts/qa_check.py" outline.json talk.pptx
-  "$PY" "$DEST/scripts/office/validate.py" talk.pptx \
-        --original "$DEST/assets/acm_template.pptx" | tail -1
-)
+# Both examples, because they exercise different halves: the paper talk covers
+# figures, annotations, the matrix and both equation forms; the weekly report
+# covers the embedded video, which is the piece that silently breaks.
+for pair in "outline.paper.example.json talk.pptx" "outline.example.json report.pptx"; do
+  set -- $pair
+  cp "$DEST/assets/examples/$1" "$TMP/outline.json"
+  (
+    cd "$TMP"
+    echo "  $1"
+    "$PY" "$DEST/scripts/build_from_outline.py" outline.json -o "$2"
+    "$PY" "$DEST/scripts/compose.py" outline.json "$2"
+    "$PY" "$DEST/scripts/qa_check.py" outline.json "$2"
+    "$PY" "$DEST/scripts/office/validate.py" "$2" \
+          --original "$DEST/assets/acm_template.pptx" | tail -1
+  )
+done
+if command -v ffprobe >/dev/null 2>&1; then
+  "$PY" "$DEST/scripts/video.py" probe "$DEST/assets/examples/figs/demo.mp4" >/dev/null \
+    && echo "  video: the bundled clip is PowerPoint-playable"
+fi
 echo
 echo "installed at: $DEST"
 echo 'in Codex, tell it: "用 $acm-pptx 做這篇論文的 paper study 投影片"'

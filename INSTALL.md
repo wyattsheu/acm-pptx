@@ -1,4 +1,4 @@
-# acm-pptx v2 — install
+# acm-pptx — install
 
 This is the **complete** skill, not a patch. Your existing `acm-pptx` files are
 all in here, with the paper-study track, the layout engine and the QA gate
@@ -34,12 +34,51 @@ Codex and Claude installs are independent.
 
 ```
 pip install python-pptx Pillow matplotlib defusedxml lxml "markitdown[pptx]"
-macOS:   brew install poppler && brew install --cask libreoffice
-Debian:  sudo apt install poppler-utils libreoffice
+macOS:   brew install poppler ffmpeg && brew install --cask libreoffice
+Debian:  sudo apt install poppler-utils ffmpeg libreoffice
 ```
 
-`markitdown` is only needed to read existing decks. MinerU is optional and
-never required.
+`markitdown` is only needed to read existing decks; `ffmpeg`/`ffprobe` only to
+embed video. MinerU is optional and never required.
+
+## What changed in v2.3.0
+
+**Video works.** `outline.json` had no `video` field, so the only route in was
+a bare `python-pptx` `add_movie()` call — which types the media part
+`video/unknown`, lands it in `[Content_Types].xml` as an Override instead of
+the `mp4 -> video/mp4` Default, and leaves PowerPoint with a file it will not
+decode. New `scripts/video.py` (`probe` / `prep` / `poster`) and a `video`
+field handled by `compose.py`: correct content type, a real poster frame
+instead of the grey speaker icon, autoplay and loop written into `p:timing`,
+and a hard refusal — with the fixing command — for anything PowerPoint cannot
+play. Verified against the ISO-29500 XSDs, `clean.py` round-trip included.
+
+**Most QA no longer needs a render.** `qa_check.py` now finds leftover
+template placeholders (`XXX`, `20XX`, `Ur Name`, `Conf.Name`), a title that
+wraps down into the subtitle, and text PowerPoint will auto-shrink — all of
+which previously cost ~1600 vision tokens per slide to spot. Font sizes are
+resolved through the template's own `buSzPts`, so the overflow estimate is no
+longer a guess against a 20pt default. Findings the template itself trips are
+baselined out, so a clean deck reaches `0 error(s)` instead of permanently
+reporting the `Todolist & Suggestion from Prof.` overflow.
+
+**`render_qa.py --contact N` and `--changed`.** A contact sheet tiles N slides
+into one image; an image costs the same whatever it holds, so a 25-slide
+review runs ~13k tokens instead of ~40k. `--changed` renders only slides whose
+XML moved since the last run.
+
+**Four bugs.** Running `compose.py` twice silently stacked a second copy of
+every figure, caption and callout (now refused). A `subtitle` on a conclusion
+slide cleared the template's `Todolist & Suggestion from Prof.` label and
+stretched it across the content area — and the QA gate was pushing you to add
+exactly that subtitle. The title band's bottom edge sat 0.07in below the
+subtitle's top. Rebuilt equation images were written into the user's `figs/`
+instead of a temp dir.
+
+**The weekly example now passes its own gate.** It previously reported six
+errors, which taught the model that failing the gate is normal. It also now
+demonstrates `matrix`, `callout` and `video`, and ships a 10 KB clip so
+`install.sh` can smoke-test video embedding end to end.
 
 ## What changed from v1.2.0
 

@@ -11,16 +11,21 @@ which is exactly why they are not errors.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import sys
 from pathlib import Path
 
 from pptx import Presentation
-from pptx.util import Emu, Pt
+from pptx.util import Emu
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "acm_template.pptx"
 
 BODY_WORD_CAP = 40          # lab-rules.md: "~40 words of body text per slide, hard"
-NOTES_MIN = 80              # WARN only: TADSR leaves results-slide notes empty
+NOTES_MIN_SENTENCES = 3     # WARN only: SKILL.md asks for three to six
 TEXT_ONLY_MAX = 0.25          # WARN only: SliderEdit sits at 24% (4/17)
 CALLOUT_MAX = 0.15            # WARN only: both reference decks use zero
 CLAIM_MIN_WORDS = 4
@@ -30,7 +35,7 @@ EXEMPT = {"cover", "summary", "paper_list", "project_summary", "research_summary
 
 # What each functional slide type must carry. PPTAgent's Stage I calls this a
 # content schema; here it is the machine-checkable half of slide-patterns.md.
-EXHIBIT_KEYS = ("figure", "matrix", "equation", "stage", "table")
+EXHIBIT_KEYS = ("figure", "video", "matrix", "equation", "stage", "table")
 ROLE_SCHEMA = {
     "paper_method":     {"exhibit": "error"},
     "paper_results":    {"exhibit": "error"},
@@ -68,6 +73,19 @@ def bullet_text(spec: dict) -> str:
     for b in spec.get("bullets") or []:
         out.append(b["text"] if isinstance(b, dict) else str(b))
     return " ".join(out)
+
+
+@functools.lru_cache(maxsize=32)
+def _video_issues(src: str) -> tuple[tuple[str, str], ...]:
+    """Cached: probing a file costs an ffprobe subprocess."""
+    try:
+        import video as video_mod
+    except ImportError:                      # video.py travels with this script
+        return ()
+    path = Path(src)
+    if not path.exists():
+        return (("error", f"video not found: {path}"),)
+    return tuple(video_mod.problems(path))
 
 
 def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
@@ -119,7 +137,22 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
             if not (fig.get("source") or "Fig" in (fig.get("caption") or "")):
                 errors.append(f"{tag}: borrowed figure with no source "
                               f"- lab-rules.md requires citing borrowed visuals")
-        if not any(spec.get(k) for k in ("figure", "matrix", "equation", "table")):
+        # 3b. an embedded video is an exhibit with a second failure mode: it
+        # can be present, correctly captioned, and still be a black rectangle
+        # in the meeting because PowerPoint cannot decode it.
+        vid = spec.get("video")
+        if vid:
+            v = {"src": vid} if isinstance(vid, str) else vid
+            for level, msg in _video_issues(str(v.get("src", ""))):
+                (errors if level == "error" else warns).append(f"{tag}: {msg}")
+            if not v.get("caption"):
+                warns.append(f"{tag}: video has no caption")
+            if not v.get("source"):
+                errors.append(f"{tag}: video with no source - say whose it is "
+                              f"(\"ours\", or the paper it came from)")
+
+        if not any(spec.get(k) for k in ("figure", "video", "matrix", "equation",
+                                         "table")):
             text_only += 1
 
         # 4. what this functional slide type must carry
@@ -148,10 +181,12 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
 
         # 5. speaker notes
         notes = (spec.get("notes") or "").strip()
+        n_sent = len([x for x in re.split(r"[。．.!?！？;；\n]+", notes) if x.strip()])
         if not notes:
             warns.append(f"{tag}: no speaker notes")
-        elif len(notes) < NOTES_MIN:
-            warns.append(f"{tag}: notes are {len(notes)} chars - thin")
+        elif n_sent < NOTES_MIN_SENTENCES:
+            warns.append(f"{tag}: notes are {n_sent} sentence(s) - the rule is "
+                         f"three to six, in 中文, full sentences")
 
     if content and n_callout > max(2, round(len(content) * CALLOUT_MAX)):
         warns.append(f"{n_callout} callout boxes across {len(content)} content slides "
@@ -166,35 +201,176 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
     return errors, warns
 
 
-def check_deck(deck: Path) -> tuple[list[str], list[str]]:
-    """Cheap overflow estimate. The render-and-look pass still matters."""
-    errors, warns = [], []
+# Tokens the template ships as "fill me in". Any of these surviving into the
+# deck is the single most embarrassing thing that can happen in a lab meeting,
+# and it is the one thing a render is usually opened to look for -- so look for
+# it here instead, for free.
+PLACEHOLDER = re.compile(
+    r"\bXXX\b|\b20XX\b|\bUr Name\b|Conf\.Name|Sponsor\.Name|Proj\.Name"
+    r"|\bPaper Title\b|lorem ipsum", re.I)
+
+MARGIN_BOTTOM, MARGIN_RIGHT = 7.2, 13.1
+AUTOFIT_HARD = 1.8              # past this even PowerPoint's autofit clips
+
+
+def _needed_height(text: str, width_in: float, pt: float, n_paras: int) -> float:
+    """Inches of box this text wants. Latin glyphs ~0.52em, CJK 1.0em, 1.22 leading."""
+    cjk = len(re.findall(r"[\u4e00-\u9fff\u3040-\u30ff]", text))
+    ems = (len(text) - cjk) * 0.52 + cjk * 1.0
+    per_line = max(1.0, (width_in * 72) / pt)
+    lines = max(n_paras, ems / per_line)
+    return lines * pt * 1.22 / 72
+
+
+A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+
+def _effective_pt(tf) -> float:
+    """The size this text actually renders at, not the one python-pptx exposes.
+
+    A template placeholder carries no `sz` on its runs -- the size comes down
+    from the layout, which python-pptx will not resolve. This template is a
+    Google Slides export, and those write `a:buSzPts` alongside every paragraph
+    with the same value as the run size (54pt title, 20pt body, verified
+    against every slide that does carry an explicit `sz`). So: explicit run
+    size, then the paragraph default, then the bullet size, then give up.
+    """
+    el = tf._txBody
+    sizes = [int(r.get("sz")) for r in el.iter(A_NS + "rPr") if r.get("sz")]
+    if sizes:
+        return max(sizes) / 100.0
+    sizes = [int(r.get("sz")) for r in el.iter(A_NS + "defRPr") if r.get("sz")]
+    if sizes:
+        return max(sizes) / 100.0
+    sizes = [int(b.get("val")) for b in el.iter(A_NS + "buSzPts") if b.get("val")]
+    if sizes:
+        return max(sizes) / 100.0
+    return 18.0
+
+
+def _autofits(tf) -> bool:
+    """PowerPoint shrinks text in a `normAutofit` box instead of overflowing it."""
+    body = tf._txBody.find(A_NS + "bodyPr")
+    return body is not None and body.find(A_NS + "normAutofit") is not None
+
+
+def _boxes(slide):
+    """Every text frame worth judging, with its geometry already in inches."""
+    out = []
+    for shp in slide.shapes:
+        if not shp.has_text_frame or not shp.text_frame.text.strip():
+            continue
+        w, h = Emu(shp.width).inches, Emu(shp.height).inches
+        x, y = Emu(shp.left).inches, Emu(shp.top).inches
+        if w < 0.5 or h < 0.3:
+            continue
+        if y > 6.6 and w < 4.5:
+            continue                       # the template's page-number placeholder
+        tf = shp.text_frame
+        out.append({
+            "name": shp.name, "x": x, "y": y, "w": w, "h": h,
+            "text": tf.text,
+            "pt": _effective_pt(tf),
+            "paras": len(tf.paragraphs),
+            "autofit": _autofits(tf),
+        })
+    return out
+
+
+def _deck_issues(deck: Path) -> list[tuple[str, int, str, str]]:
+    """(level, slide number, dedup key, message) for everything geometry can see."""
+    out = []
     prs = Presentation(str(deck))
     for i, slide in enumerate(prs.slides, start=1):
+        boxes = _boxes(slide)
+        for b in boxes:
+            need = _needed_height(b["text"], b["w"], b["pt"], b["paras"])
+            b["need"] = need
+            ratio = need / b["h"]
+            # An autofit box shrinks its own text, so a mild overrun is cosmetic
+            # (smaller type than the lab's 24pt floor) rather than a clipped
+            # slide. Past ~1.8x even autofit gives up.
+            if ratio > (AUTOFIT_HARD if b["autofit"] else 1.15):
+                out.append(("error", i, f"overflow|{b['name']}|{b['text']}",
+                            f"slide {i}: text overflows {b['name']!r} "
+                            f"(needs ~{need:.1f}in, box is {b['h']:.1f}in)"))
+            elif b["autofit"] and ratio > 1.15:
+                out.append(("warn", i, f"shrink|{b['name']}|{b['text']}",
+                            f"slide {i}: {b['name']!r} will be auto-shrunk to fit "
+                            f"(~{need:.1f}in of text in a {b['h']:.1f}in box) "
+                            f"- shorten it or it drops below the 24pt floor"))
+            if b["y"] + b["h"] > MARGIN_BOTTOM or b["x"] + b["w"] > MARGIN_RIGHT:
+                out.append(("warn", i, f"margin|{b['name']}",
+                            f"slide {i}: {b['name']!r} runs past the safe margin"))
+
+        # A title that grew a second line and landed on the subtitle is the
+        # classic "you had to look at it" bug. It is arithmetic, not eyesight.
+        for a in boxes:
+            # autofit keeps the text inside its own box, so it cannot collide
+            a_need = min(a["need"], a["h"]) if a["autofit"] else a["need"]
+            for c in boxes:
+                if c is a or c["y"] <= a["y"]:
+                    continue
+                overlap = min(a["x"] + a["w"], c["x"] + c["w"]) - max(a["x"], c["x"])
+                if overlap < 0.3 * min(a["w"], c["w"]):
+                    continue
+                if a["y"] + a_need > c["y"] + 0.04:
+                    out.append(("error", i, f"collide|{a['name']}|{c['name']}",
+                                f"slide {i}: {a['name']!r} wraps down into "
+                                f"{c['name']!r} - shorten it or move the box"))
+
+        # leftover fill-me tokens, in shapes and in table cells alike
         for shp in slide.shapes:
-            if not shp.has_text_frame or not shp.text_frame.text.strip():
-                continue
-            w_in = Emu(shp.width).inches
-            h_in = Emu(shp.height).inches
-            if w_in < 0.5 or h_in < 0.3:
-                continue
-            if Emu(shp.top).inches > 6.6 and w_in < 4.5:
-                continue           # the template's own page-number placeholder
-            sizes = [r.font.size.pt for p in shp.text_frame.paragraphs
-                     for r in p.runs if r.font.size]
-            pt = max(sizes) if sizes else 20.0
-            # latin glyphs run ~0.52em wide, CJK 1.0em; 1.22 line spacing
-            txt = shp.text_frame.text
-            cjk = len(re.findall(r"[\u4e00-\u9fff\u3040-\u30ff]", txt))
-            ems = (len(txt) - cjk) * 0.52 + cjk * 1.0
-            per_line = max(1.0, (w_in * 72) / pt)
-            lines = max(len(shp.text_frame.paragraphs), ems / per_line)
-            need = lines * pt * 1.22 / 72
-            if need > h_in * 1.15:
-                errors.append(f"slide {i}: text likely overflows {shp.name!r} "
-                              f"(needs ~{need:.1f}in, box is {h_in:.1f}in)")
-            if Emu(shp.top).inches + h_in > 7.2 or Emu(shp.left).inches + w_in > 13.1:
-                warns.append(f"slide {i}: {shp.name!r} runs past the safe margin")
+            texts = []
+            if shp.has_text_frame:
+                texts.append(shp.text_frame.text)
+            if shp.has_table:
+                texts.extend(c.text for r in shp.table.rows for c in r.cells)
+            seen = set()
+            for t in texts:
+                for m in PLACEHOLDER.finditer(t or ""):
+                    tok = m.group(0)
+                    if tok.lower() in seen:
+                        continue
+                    seen.add(tok.lower())
+                    out.append(("error", i, f"placeholder|{shp.name}|{tok}",
+                                f"slide {i}: template placeholder {tok!r} survived "
+                                f"into {shp.name!r} - fill it or blank it"))
+    return out
+
+
+@functools.lru_cache(maxsize=4)
+def _template_keys(template: str) -> frozenset:
+    """What the lab template already trips on its own.
+
+    The template ships real defects -- `Todolist & Suggestion from Prof.`
+    overflows its box on every conclusion slide, and slide 2 is wall-to-wall
+    `XXX`. Reporting those on every run trains you to ignore the gate, and
+    keeps `render_qa.py` refusing to render. Baseline them: a finding is only
+    yours if the same shape with the same text is not already broken upstream.
+    """
+    if not Path(template).exists():
+        return frozenset()
+    # `placeholder|...` is deliberately excluded: every one of these tokens is
+    # in the template by design, so baselining them would suppress exactly the
+    # finding they exist to make.
+    return frozenset(key for _, _, key, _ in _deck_issues(Path(template))
+                     if not key.startswith("placeholder|"))
+
+
+def check_deck(deck: Path, template: Path | None = TEMPLATE) -> tuple[list[str], list[str]]:
+    """Everything a render would have been opened to check, minus the render.
+
+    Overflow, margin breaches, a title colliding with the line under it, and
+    template placeholders that were never filled. What is left for your eyes is
+    genuinely visual: crop quality, annotation placement, colour.
+    """
+    inherited = _template_keys(str(template)) if template else frozenset()
+    errors, warns = [], []
+    for level, _, key, msg in _deck_issues(deck):
+        if key in inherited:
+            continue
+        (errors if level == "error" else warns).append(msg)
     return errors, warns
 
 
