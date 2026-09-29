@@ -4,7 +4,8 @@
 build_from_outline.py clones template slides and fills text. This adds the
 things a paper talk actually needs: a red claim line under the title, a
 figure with its caption, annotations drawn on that figure, a comparison
-matrix, an equation band, an embedded video, and the bottom callout.
+matrix, a native editable diagram, an equation band, an embedded video, and
+the bottom callout.
 
     python scripts/build_from_outline.py outline.json -o talk.pptx
     python scripts/compose.py outline.json talk.pptx
@@ -35,6 +36,10 @@ HEAD_BG = RGBColor(0x3E, 0x4A, 0x5B)  # matrix header
 HEAD_FG = RGBColor(0xFF, 0xFF, 0xFF)
 ROW_HI = RGBColor(0xE8, 0xF2, 0xE1)   # the "Ours" row
 BAND = RGBColor(0xF2, 0xF2, 0xF2)     # equation band
+DIAGRAM_FILL = RGBColor(0xFA, 0xFA, 0xFA)
+DIAGRAM_LINE = RGBColor(0x5B, 0x67, 0x78)
+DIAGRAM_TEXT = RGBColor(0x1A, 0x1A, 0x1A)
+DIAGRAM_GROUP = RGBColor(0xA6, 0xAD, 0xB8)
 
 # ---------------------------------------------------------------- geometry
 # template: 13.333 x 7.5in, title 0.40-1.85, body 2.00-6.75, page no. at 6.95
@@ -64,7 +69,7 @@ def regions(spec: dict) -> dict:
     w = RIGHT - LEFT
     layout = spec.get("layout")
     if not layout:
-        if spec.get("video"):
+        if spec.get("video") or spec.get("diagram"):
             layout = "figure-right" if spec.get("bullets") else "figure-full"
         elif spec.get("figure"):
             layout = "figure-bottom"
@@ -166,6 +171,13 @@ def textbox(slide, box, text, size, *, color=None, bold=False, italic=False,
     if color is not None:
         run.font.color.rgb = color
     return tb
+
+
+def _set_shape_name(shape, name: str) -> None:
+    """Give generated objects stable names in PowerPoint's Selection Pane."""
+    nodes = shape._element.xpath(".//p:cNvPr")
+    if nodes:
+        nodes[0].set("name", name)
 
 
 def fit(img_box, iw, ih, *, vcenter=True):
@@ -419,6 +431,19 @@ def add_matrix(slide, spec, box) -> None:
                                 Inches(w), Inches(height))
     table = gf.table
     table.first_row = True
+    # Equal-width columns are a strong generated-deck tell and waste space on
+    # short numeric metrics. Allocate width from actual content, with the label
+    # column receiving a modest priority but no column allowed to dominate.
+    lengths = []
+    for c in range(n_cols):
+        values = [str(header[c])] + [str(row[c]) for row in rows if c < len(row)]
+        lengths.append(max(4, min(28, max(len(value) for value in values))))
+    if n_cols:
+        lengths[0] *= 1.22
+    total = sum(lengths)
+    for c, weight in enumerate(lengths):
+        table.columns[c].width = Inches(w * weight / total)
+    table.rows[0].height = Inches(0.42)
     for c, txt in enumerate(header):
         cell = table.cell(0, c)
         cell.text = str(txt)
@@ -427,6 +452,7 @@ def add_matrix(slide, spec, box) -> None:
         _style_cell(cell, 13, bold=True, color=HEAD_FG,
                     align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
     for r, row in enumerate(rows, start=1):
+        table.rows[r].height = Inches(max(0.34, (height - 0.42) / max(1, len(rows))))
         for c, txt in enumerate(row[:n_cols]):
             cell = table.cell(r, c)
             cell.text = str(txt)
@@ -435,8 +461,293 @@ def add_matrix(slide, spec, box) -> None:
                 cell.fill.fore_color.rgb = ROW_HI
             else:
                 cell.fill.background()
-            _style_cell(cell, 12.5, bold=(hi is not None and r == hi),
+            _style_cell(cell, 12.5,
+                        bold=(c == 0 or (hi is not None and r == hi)),
                         align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
+
+
+# ---------------------------------------------------------------- native diagrams
+
+DIAGRAM_SHAPES = {
+    # Shape carries semantics. Plain processes are square rectangles; rounded
+    # boxes are reserved for explicit use, and terminators stay terminators.
+    # This avoids the generic "every idea is a pastel pill" AI aesthetic.
+    "process": MSO_SHAPE.RECTANGLE,
+    "rect": MSO_SHAPE.RECTANGLE,
+    "rounded": MSO_SHAPE.ROUNDED_RECTANGLE,
+    "decision": MSO_SHAPE.DIAMOND,
+    "terminator": MSO_SHAPE.FLOWCHART_TERMINATOR,
+    "circle": MSO_SHAPE.OVAL,
+    "database": MSO_SHAPE.CAN,
+}
+
+
+def _diagram_levels(node_ids: list[str], edges: list[dict]) -> dict[str, int]:
+    """Longest-path layers for a DAG, with deterministic cycle fallback.
+
+    Most slide diagrams are small DAGs.  Kahn layering gives branches the
+    expected shared column/row.  A feedback loop leaves nodes behind; those
+    are placed in declaration order after their deepest resolved predecessor,
+    and the back edge is still drawn.  This keeps a loop editable without
+    pretending to be a general graph-layout engine.
+    """
+    order = {node_id: i for i, node_id in enumerate(node_ids)}
+    incoming = {node_id: 0 for node_id in node_ids}
+    outgoing = {node_id: [] for node_id in node_ids}
+    predecessors = {node_id: [] for node_id in node_ids}
+    for edge in edges:
+        source, target = edge["from"], edge["to"]
+        if source == target:
+            continue
+        outgoing[source].append(target)
+        predecessors[target].append(source)
+        incoming[target] += 1
+
+    queue = sorted((n for n in node_ids if incoming[n] == 0), key=order.get)
+    levels = {n: 0 for n in queue}
+    done = set()
+    while queue:
+        node_id = queue.pop(0)
+        done.add(node_id)
+        for target in outgoing[node_id]:
+            levels[target] = max(levels.get(target, 0), levels[node_id] + 1)
+            incoming[target] -= 1
+            if incoming[target] == 0:
+                queue.append(target)
+                queue.sort(key=order.get)
+
+    next_level = max(levels.values(), default=-1) + 1
+    for node_id in node_ids:
+        if node_id in done:
+            continue
+        resolved = [levels[p] + 1 for p in predecessors[node_id] if p in levels]
+        levels[node_id] = max(resolved, default=next_level)
+        next_level = max(next_level, levels[node_id] + 1)
+    return levels
+
+
+def _diagram_boxes(diagram: dict, box) -> dict[str, tuple[float, float, float, float]]:
+    nodes = diagram["nodes"]
+    node_ids = [str(n["id"]) for n in nodes]
+    direction = str(diagram.get("direction", "LR")).upper()
+    if direction not in {"LR", "RL", "TB", "BT"}:
+        raise SystemExit("diagram.direction must be LR, RL, TB or BT")
+    levels = _diagram_levels(node_ids, diagram.get("edges") or [])
+    columns: dict[int, list[str]] = {}
+    for node_id in node_ids:
+        columns.setdefault(levels[node_id], []).append(node_id)
+    level_values = sorted(columns)
+    level_index = {value: i for i, value in enumerate(level_values)}
+    x, y, w, h = box
+    horizontal = direction in {"LR", "RL"}
+    primary_count = max(1, len(level_values))
+    secondary_count = max((len(v) for v in columns.values()), default=1)
+
+    if horizontal:
+        cell_w, cell_h = w / primary_count, h / secondary_count
+        node_w = max(0.72, min(1.85, cell_w * 0.72))
+        node_h = max(0.42, min(0.78, cell_h * 0.56))
+    else:
+        cell_w, cell_h = w / secondary_count, h / primary_count
+        node_w = max(0.82, min(2.15, cell_w * 0.70))
+        node_h = max(0.42, min(0.78, cell_h * 0.56))
+
+    out = {}
+    for node in nodes:
+        node_id = str(node["id"])
+        if node.get("at") is not None:
+            at = node["at"]
+            if not isinstance(at, list) or len(at) != 4:
+                raise SystemExit(f"diagram node {node_id!r}: `at` must be [x,y,w,h]")
+            nx, ny, nw, nh = (float(v) for v in at)
+            if min(nx, ny, nw, nh) < 0 or nx + nw > 1 or ny + nh > 1:
+                raise SystemExit(f"diagram node {node_id!r}: `at` must stay inside 0..1")
+            out[node_id] = (x + nx * w, y + ny * h, nw * w, nh * h)
+            continue
+
+        layer = level_index[levels[node_id]]
+        peers = columns[levels[node_id]]
+        slot = peers.index(node_id)
+        if horizontal:
+            px = layer if direction == "LR" else primary_count - 1 - layer
+            cx = x + (px + 0.5) * cell_w
+            cy = y + (slot + 0.5) * (h / len(peers))
+        else:
+            py = layer if direction == "TB" else primary_count - 1 - layer
+            cx = x + (slot + 0.5) * (w / len(peers))
+            cy = y + (py + 0.5) * cell_h
+        nw, nh = node_w, node_h
+        if node.get("kind") == "decision":
+            nw, nh = min(cell_w * 0.78, nw * 1.12), min(cell_h * 0.78, nh * 1.28)
+        if node.get("kind") == "circle":
+            side = min(nw, nh)
+            nw = nh = side
+        out[node_id] = (cx - nw / 2, cy - nh / 2, nw, nh)
+    return out
+
+
+def _edge_points(source, target, direction: str):
+    sx, sy, sw, sh = source
+    tx, ty, tw, th = target
+    if direction == "LR":
+        return (sx + sw, sy + sh / 2, tx, ty + th / 2)
+    if direction == "RL":
+        return (sx, sy + sh / 2, tx + tw, ty + th / 2)
+    if direction == "TB":
+        return (sx + sw / 2, sy + sh, tx + tw / 2, ty)
+    return (sx + sw / 2, sy, tx + tw / 2, ty + th)
+
+
+def _rgb(value, default: RGBColor) -> RGBColor:
+    if value is None:
+        return default
+    return RGBColor.from_string(str(value).lstrip("#").upper())
+
+
+def _validate_diagram(diagram: dict) -> None:
+    if not isinstance(diagram, dict):
+        raise SystemExit("diagram must be an object with nodes and edges")
+    nodes = diagram.get("nodes") or []
+    edges = diagram.get("edges") or []
+    if len(nodes) < 2:
+        raise SystemExit("diagram needs at least two nodes")
+    if len(nodes) > 20 or len(edges) > 32:
+        raise SystemExit("diagram is too dense for one slide (max 20 nodes / 32 edges)")
+    ids = [str(n.get("id", "")) for n in nodes]
+    if any(not node_id for node_id in ids) or len(ids) != len(set(ids)):
+        raise SystemExit("diagram node ids must be present and unique")
+    known = set(ids)
+    for edge in edges:
+        if edge.get("from") not in known or edge.get("to") not in known:
+            raise SystemExit(f"diagram edge references an unknown node: {edge}")
+    for group in diagram.get("groups") or []:
+        missing = set(group.get("nodes") or []) - known
+        if missing:
+            raise SystemExit(f"diagram group {group.get('id')!r} has unknown nodes: {sorted(missing)}")
+
+
+def add_diagram(slide, spec, box) -> None:
+    """Draw an editable flow/architecture diagram with native PPT objects."""
+    diagram = spec["diagram"]
+    _validate_diagram(diagram)
+    x, y, w, h = box
+    caption = diagram.get("caption")
+    if caption:
+        h -= CAPTION_H
+    canvas = (x, y, w, h)
+    boxes = _diagram_boxes(diagram, canvas)
+    direction = str(diagram.get("direction", "LR")).upper()
+
+    # Frames and connectors go behind nodes. They remain separate native
+    # objects so PowerPoint users can recolour, reroute, relabel or delete them.
+    for index, group in enumerate(diagram.get("groups") or [], start=1):
+        members = [boxes[node_id] for node_id in group.get("nodes") or []]
+        if not members:
+            continue
+        pad, title_h = 0.12, 0.25
+        gx = min(b[0] for b in members) - pad
+        gy = min(b[1] for b in members) - pad - title_h
+        gr = max(b[0] + b[2] for b in members) + pad
+        gb = max(b[1] + b[3] for b in members) + pad
+        frame = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
+                                       Inches(gx), Inches(gy), Inches(gr - gx), Inches(gb - gy))
+        strip_style(frame)
+        frame.fill.background()
+        frame.line.color.rgb = _rgb(group.get("color"), DIAGRAM_GROUP)
+        frame.line.width = Pt(1.0)
+        frame.line.dash_style = 4
+        frame.shadow.inherit = False
+        _set_shape_name(frame, f"diagram:group:{group.get('id', index)}")
+        tf = frame.text_frame
+        tf.clear()
+        tf.word_wrap = False
+        tf.vertical_anchor = MSO_ANCHOR.TOP
+        tf.margin_left = tf.margin_right = Inches(0.10)
+        tf.margin_top = Inches(0.02)
+        p = tf.paragraphs[0]
+        r = p.add_run()
+        r.text = str(group.get("label") or group.get("id") or "")
+        r.font.size, r.font.bold, r.font.color.rgb = Pt(11), True, DIAGRAM_GROUP
+
+    connector_records = []
+    for index, edge in enumerate(diagram.get("edges") or [], start=1):
+        points = _edge_points(boxes[edge["from"]], boxes[edge["to"]], direction)
+        x0, y0, x1, y1 = points
+        offset = abs(y1 - y0) if direction in {"LR", "RL"} else abs(x1 - x0)
+        connector = slide.shapes.add_connector(
+            MSO_CONNECTOR.ELBOW if offset > 0.08 else MSO_CONNECTOR.STRAIGHT,
+            Inches(x0), Inches(y0), Inches(x1), Inches(y1))
+        connector.line.color.rgb = _rgb(edge.get("color"), DIAGRAM_LINE)
+        connector.line.width = Pt(float(edge.get("width", 1.6)))
+        if edge.get("dashed"):
+            connector.line.dash_style = 4
+        if edge.get("arrow", True):
+            _arrowhead(connector)
+        edge_id = edge.get("id") or f"e{index}"
+        _set_shape_name(connector, f"diagram:edge:{edge_id}")
+        connector_records.append((connector, edge))
+        if edge.get("label"):
+            mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+            label = textbox(slide, (mx - 0.48, my - 0.16, 0.96, 0.30),
+                            str(edge["label"]), 10.5, color=DIAGRAM_TEXT,
+                            bold=True, align=PP_ALIGN.CENTER,
+                            anchor=MSO_ANCHOR.MIDDLE)
+            label.fill.solid()
+            label.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            label.line.fill.background()
+            _set_shape_name(label, f"diagram:label:{edge_id}")
+
+    node_shapes = {}
+    for node in diagram["nodes"]:
+        node_id = str(node["id"])
+        nx, ny, nw, nh = boxes[node_id]
+        kind = str(node.get("kind", "process"))
+        if kind not in DIAGRAM_SHAPES:
+            raise SystemExit(f"diagram node {node_id!r}: unknown kind {kind!r}")
+        shape = slide.shapes.add_shape(DIAGRAM_SHAPES[kind],
+                                       Inches(nx), Inches(ny), Inches(nw), Inches(nh))
+        strip_style(shape)
+        accent = bool(node.get("accent"))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = _rgb(node.get("fill"),
+                                         RGBColor(0xFD, 0xEE, 0xEE) if accent else DIAGRAM_FILL)
+        shape.line.color.rgb = _rgb(node.get("line"), RED if accent else DIAGRAM_LINE)
+        shape.line.width = Pt(2.0 if accent else 1.25)
+        shape.shadow.inherit = False
+        _set_shape_name(shape, f"diagram:node:{node_id}")
+        node_shapes[node_id] = shape
+        tf = shape.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        tf.margin_left = tf.margin_right = Inches(0.06)
+        tf.margin_top = tf.margin_bottom = Inches(0.03)
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        r = p.add_run()
+        r.text = str(node.get("text") or node_id)
+        r.font.size = Pt(float(node.get("size", 16)))
+        r.font.bold = bool(node.get("bold", accent))
+        r.font.color.rgb = _rgb(node.get("text_color"), DIAGRAM_TEXT)
+
+    # Attach endpoints after every node exists. The connector was inserted
+    # first, so it stays visually behind the nodes while still following them
+    # when a user moves a box in PowerPoint.
+    points = {
+        "LR": (3, 1),   # right -> left
+        "RL": (1, 3),   # left -> right
+        "TB": (2, 0),   # bottom -> top
+        "BT": (0, 2),   # top -> bottom
+    }
+    begin_idx, end_idx = points[direction]
+    for connector, edge in connector_records:
+        if edge.get("attached", True):
+            connector.begin_connect(node_shapes[edge["from"]], begin_idx)
+            connector.end_connect(node_shapes[edge["to"]], end_idx)
+
+    if caption:
+        textbox(slide, (x, y + h + 0.05, w, CAPTION_H), str(caption), 11,
+                color=GREY, italic=True, align=PP_ALIGN.CENTER)
 
 
 def _style_cell(cell, size, *, bold=False, color=None, align=PP_ALIGN.LEFT):
@@ -574,8 +885,8 @@ def flatten(outline: dict) -> list[dict]:
     return flat
 
 
-VISUAL_KEYS = ("subtitle", "figure", "video", "annotations", "callout",
-               "matrix", "equation", "stage", "divider")
+VISUAL_KEYS = ("subtitle", "figure", "video", "diagram", "annotations",
+               "callout", "matrix", "equation", "stage", "divider")
 
 
 STAMP = "acm-composed"          # so a second pass cannot silently double every shape
@@ -645,7 +956,14 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
             add_equation(slide, spec, eq_box, outline_dir, str(idx))
         if spec.get("matrix"):
             add_matrix(slide, spec, reg["body"] or reg["fig"])
-        if spec.get("stage") and reg["fig"]:
+        if spec.get("diagram") and reg["fig"]:
+            conflicts = [key for key in ("figure", "video", "stage", "matrix", "equation")
+                         if spec.get(key)]
+            if conflicts:
+                raise SystemExit(f"slide {idx} has `diagram` plus {', '.join(conflicts)} "
+                                 f"- one exhibit per slide; split them")
+            add_diagram(slide, spec, reg["fig"])
+        elif spec.get("stage") and reg["fig"]:
             if not stage_figure:
                 raise SystemExit(f"slide {idx} sets `stage` but the outline has no "
                                  f"top-level `stage_figure`")

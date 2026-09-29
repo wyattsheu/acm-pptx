@@ -50,6 +50,24 @@ lets the plain skill hand work off to the executable one.
       }
     },
     {
+      "role": "project_pipeline",
+      "title": "Frames become isolated trajectory commands",
+      "diagram": {
+        "direction": "LR",
+        "nodes": [
+          {"id": "camera", "text": "RGB-D frame", "kind": "terminator"},
+          {"id": "detect", "text": "Detect target", "kind": "process"},
+          {"id": "valid", "text": "Pose valid?", "kind": "decision"},
+          {"id": "plan", "text": "Plan trajectory", "kind": "process", "accent": true}
+        ],
+        "edges": [
+          {"from": "camera", "to": "detect"},
+          {"from": "detect", "to": "valid"},
+          {"from": "valid", "to": "plan", "label": "yes"}
+        ]
+      }
+    },
+    {
       "role": "project_conclusion",
       "title": "Conclusion",
       "table": ["first todo", "second todo"]        // numbered table, rest blanked
@@ -71,7 +89,12 @@ lets the plain skill hand work off to the executable one.
   than guessing.
 - `bullets` and `table` are mutually exclusive on a slide — a table role
   ignores bullets.
-- `figure` and `video` are mutually exclusive too: one exhibit per slide.
+- `figure`, `video`, and `diagram` are mutually exclusive. A native diagram
+  also cannot share a slide with `stage`, `matrix`, or `equation`; split the
+  exhibits rather than shrinking both.
+- `diagram` creates editable PowerPoint objects. Node `id` values must be
+  unique and every edge endpoint must name one. Coordinates are optional;
+  automatic LR/RL/TB/BT layout is the default. See `slide-patterns.md`.
 - `level` maps onto the template's own indent tiers, discovered per slide from
   the template's `marL` values. A level above the deepest available tier
   clamps to the deepest. Never fake indentation with spaces or dashes.

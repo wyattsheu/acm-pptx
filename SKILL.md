@@ -3,7 +3,7 @@ name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, 論文報告, paper study, or any .pptx/.potx in ACM Lab format, and whenever such a deck is created, edited or read. Also use it when the user hands you a paper PDF or a MinerU directory and asks for slides, when they hand you an outline, when they want a demo video or supplementary clip inside a deck, or when they mention Prof. Huang Ching-Chun's lab meeting. Never build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
 license: Lab-internal use
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   template_version: "acm_template.pptx (22 slides, 13.333in x 7.5in)"
 ---
 
@@ -60,8 +60,9 @@ python "$SKILL_DIR/scripts/office/validate.py" "$DECK" --original "$SKILL_DIR/as
 Two passes, in that order. `build_from_outline.py` clones role slides and
 replaces text run-by-run so fonts, bullet tiers and table styling survive.
 `compose.py` then resizes the body placeholder and lays in the figure or video,
-annotations, comparison table, equation band and callout — it computes every
-region from the named layout, which is why nothing overlaps. Running
+annotations, comparison table, native editable diagram, equation band and
+callout — it computes every region from the named layout, which is why nothing
+overlaps. Running
 `compose.py` twice on one deck is refused: rebuild first.
 
 `build_from_outline.py` finds its own template, so `--template` is only needed
@@ -150,6 +151,18 @@ counts follow the material and speaking time, not a fixed quota.
   itself. Review text-only stretches for missing evidence; do not add a decorative
   table just to meet an exhibit quota. A coordinated before/after pair or
   multi-panel comparison can be one exhibit.
+- **Keep authored structure editable.** Build comparison tables as native
+  PowerPoint tables (`matrix`) and new workflows, pipelines and architecture
+  diagrams as native PowerPoint nodes and connectors (`diagram`). Never render
+  Mermaid, Graphviz, matplotlib patches or HTML into a PNG for these. Images
+  are for source paper figures, photos, screenshots and experimental output
+  whose pixels are evidence. Read `references/evidence-selection.md` before
+  choosing between `diagram` and `figure`.
+- **Do not use the generic AI-card look.** Shape means function: rectangles for
+  processes, diamonds for decisions, terminators only at starts/ends, cylinders
+  only for storage. Use one neutral fill, thin grey connectors, square alignment
+  and whitespace. Reserve the lab red for the node or row currently being
+  argued; do not make every node a rounded pastel card.
 - **Preserve useful source figures.** Crop and enlarge paper architecture
   figures, qualitative panels and plots with `scripts/figure.py` at 300 dpi;
   retain legends and cite the source. Re-plot when verified data is available
@@ -165,7 +178,9 @@ counts follow the material and speaking time, not a fixed quota.
   Terse slides are only safe when the notes are full.
 - **Tables** (`conclusion`, `paper_list`, `summary`) take a list; unused rows
   are blanked. Leave the numbering column alone. A comparison table you are
-  building yourself is a `matrix`, not one of these.
+  building yourself is a `matrix`, not one of these. Keep only decisive rows
+  and columns; short numeric columns should not receive the same width as the
+  label column.
 - Emoji status markers in the summary task table: 🔄 in progress · ✅ done ·
   ❌ dropped · ⏳ waiting · 🆕 new · 🔜 upcoming · 📌 important · 💤 on hold ·
   🛠️ needs fixing · 💡 idea · 📅 scheduled.
@@ -234,7 +249,9 @@ PowerPoint cannot decode, text that will not fit its box, a title that wraps
 down into the line beneath it, a template placeholder (`XXX`, `20XX`,
 `Ur Name`, `Conf.Name`) still in the deck, a method or results slide with no
 exhibit, an assertion-evidence slide carrying bullets or no evidence, and a
-generic title with nothing under it. It warns on thin notes, piled-up callouts,
+generic title with nothing under it. For every `diagram`, it also verifies that
+all declared nodes, edges and groups exist in the `.pptx` as named native
+PowerPoint objects. It warns on thin notes, piled-up callouts,
 a high text-only ratio, and text PowerPoint will auto-shrink. Findings the lab
 template already trips on its own are baselined out, so a clean deck really
 does reach `0 error(s)`. `--review` adds the claim sequence, a slide inventory

@@ -16,11 +16,21 @@ A component/purpose/status table loses these relationships.
 
 For a paper, start from the original overview figure. Crop and enlarge it,
 highlight the relevant path, then reuse it with a different highlight when
-explaining another stage. If simplifying helps, draw only the relevant nodes
-and connections with matplotlib patches or another available diagram tool;
-export a high-resolution PNG and supply it as `figure.src`. Caption it
-“Adapted from Fig. N” and preserve the original semantics in the notes.
-The builder has no `diagram` field; use the existing figure layouts.
+explaining another stage. If simplifying helps, redraw only the relevant nodes
+and connections with the native `diagram` field; caption it “Adapted from Fig.
+N” and preserve the original semantics in the notes. Do not flatten a newly
+authored workflow into PNG, SVG or a Mermaid screenshot.
+
+Use semantic shapes sparingly: rectangle = process, diamond = decision,
+terminator = start/end, cylinder = stored data. Prefer a single neutral fill,
+thin connectors, aligned baselines and whitespace. Accent only the current
+stage. Rounded pastel cards, gradients, shadows, ornamental icons and a unique
+colour for every node make generated slides look generic and weaken topology.
+
+Use a `figure` instead when the original pixels carry evidence: a paper's full
+architecture drawing, a photograph, microscopy, a screenshot, a qualitative
+result or a dense composite whose faithful native reconstruction would invent
+detail. Native labels and callouts may still sit outside that image.
 
 ## Explain an execution result
 
@@ -40,7 +50,9 @@ caption or notes. Report unavailable results as unavailable.
   when stills explain the claim. A “demo completed” table is not a demo.
 - Exact values across several metrics: a small `matrix` is useful. Keep the
   decisive rows/columns, units, conditions and source; avoid prose paragraphs
-  inside cells. Do not turn a single observed change into a table by default.
+  inside cells. Let label columns be wider than short metric columns, avoid
+  decorative zebra striping, and highlight only the row or value under
+  discussion. Do not turn a single observed change into a table by default.
 
 Create plots with matplotlib from the verified values, then use `figure.src`.
 For aligned images, compose a labelled panel from the actual outputs without

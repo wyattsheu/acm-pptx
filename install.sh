@@ -106,6 +106,7 @@ for pair in "outline.paper.example.json talk.pptx" "outline.example.json report.
           --original "$DEST/assets/acm_template.pptx" | tail -1
   )
 done
+"$PY" "$DEST/scripts/test_diagram.py"
 if command -v ffprobe >/dev/null 2>&1; then
   "$PY" "$DEST/scripts/video.py" probe "$DEST/assets/examples/figs/demo.mp4" >/dev/null \
     && echo "  video: the bundled clip is PowerPoint-playable"

@@ -14,7 +14,8 @@ ACM Lab (NYCU) PowerPoint 投影片生成工具 / Codex 與 Claude Skill。
 | `v2.0.0` | 新增 paper-study 支援、blueprint-paper 等 references |
 | `v2.1.0` | 新增 `qa_check --review`、Codex skill 支援 |
 | `v2.2.0` | 紅框改為稀用、標題承載論點；QA 只渲染需要看的頁面；輸出只留一份 .pptx |
-| `v2.3.0` | 目前最新版。**支援嵌入影片**；QA 改成大部分不用渲染就查得出來；contact sheet 把看圖成本降到約三分之一 |
+| `v2.3.0` | **支援嵌入影片**；QA 改成大部分不用渲染就查得出來；contact sheet 把看圖成本降到約三分之一 |
+| `v2.4.0` | 目前最新版。**原生可編輯流程圖**：nodes / edges / groups 自動排版成 PowerPoint shapes 與 connectors；表格依內容分配欄寬；QA 驗證 diagram 不是扁平圖片 |
 
 ## 使用方式
 
@@ -41,6 +42,18 @@ git checkout v1.2.0
 ```bash
 git checkout main
 ```
+
+## v2.4.0 有什麼
+
+**流程圖不再是圖片。** 在 outline 使用 `diagram`，`compose.py` 會建立原生
+PowerPoint 方塊、決策菱形、資料庫、文字、群組框與連接線；每個物件都能在
+PowerPoint 裡單獨修改。LR/RL/TB/BT 會自動分層排版，也可用 0–1 比例座標微調
+單一節點。預設風格刻意克制：中性填色、細灰線、無陰影與漸層，只有目前論點的
+節點使用 ACM 紅色，避免常見的「每個概念都是彩色圓角卡片」生成感。
+
+**表格仍是原生 PowerPoint table。** `matrix` 會依內容長度配置欄寬，標籤欄較寬、
+短數值欄較窄，只突出正在討論的 row。`qa_check.py` 會檢查 diagram 宣告的每個
+node、edge、group 是否真的以命名原生物件存在於 `.pptx`。
 
 ## v2.3.0 有什麼
 

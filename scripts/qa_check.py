@@ -35,7 +35,7 @@ EXEMPT = {"cover", "summary", "paper_list", "project_summary", "research_summary
 
 # What each functional slide type must carry. PPTAgent's Stage I calls this a
 # content schema; here it is the machine-checkable half of slide-patterns.md.
-EXHIBIT_KEYS = ("figure", "video", "matrix", "equation", "stage", "table")
+EXHIBIT_KEYS = ("figure", "video", "diagram", "matrix", "equation", "stage", "table")
 ROLE_SCHEMA = {
     "paper_method":     {"exhibit": "error"},
     "paper_results":    {"exhibit": "error"},
@@ -151,8 +151,37 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
                 errors.append(f"{tag}: video with no source - say whose it is "
                               f"(\"ours\", or the paper it came from)")
 
-        if not any(spec.get(k) for k in ("figure", "video", "matrix", "equation",
-                                         "table")):
+        # 3c. diagrams are native PowerPoint objects, not figure bitmaps.  The
+        # topology is explicit so an unknown endpoint cannot silently become a
+        # floating arrow in the deck.
+        diagram = spec.get("diagram")
+        if diagram:
+            if not isinstance(diagram, dict):
+                errors.append(f"{tag}: `diagram` must be an object")
+            else:
+                nodes = diagram.get("nodes") or []
+                edges = diagram.get("edges") or []
+                ids = [str(n.get("id", "")) for n in nodes if isinstance(n, dict)]
+                if len(nodes) < 2:
+                    errors.append(f"{tag}: diagram needs at least two nodes")
+                if len(nodes) > 20 or len(edges) > 32:
+                    errors.append(f"{tag}: diagram is too dense for one slide "
+                                  f"(max 20 nodes / 32 edges)")
+                if len(ids) != len(nodes) or any(not node_id for node_id in ids) \
+                        or len(ids) != len(set(ids)):
+                    errors.append(f"{tag}: diagram node ids must be present and unique")
+                known = set(ids)
+                for edge in edges:
+                    if not isinstance(edge, dict) or edge.get("from") not in known \
+                            or edge.get("to") not in known:
+                        errors.append(f"{tag}: diagram edge references an unknown node: {edge}")
+                other = [k for k in ("figure", "video", "stage", "matrix", "equation")
+                         if spec.get(k)]
+                if other:
+                    errors.append(f"{tag}: native `diagram` cannot share a slide with "
+                                  f"{', '.join(other)} - split the exhibits")
+
+        if not any(spec.get(k) for k in EXHIBIT_KEYS):
             text_only += 1
 
         # 4. what this functional slide type must carry
@@ -160,8 +189,8 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
         for key, severity in schema.items():
             if key == "exhibit":
                 ok = any(spec.get(k) for k in EXHIBIT_KEYS)
-                msg = (f"{tag}: a {role} slide with no exhibit - one figure, "
-                       f"matrix or equation per slide")
+                msg = (f"{tag}: a {role} slide with no exhibit - use a figure, "
+                       f"native diagram, matrix or equation")
             else:
                 ok = bool(spec.get(key))
                 msg = f"{tag}: {role} slide is missing `{key}`"
@@ -374,6 +403,43 @@ def check_deck(deck: Path, template: Path | None = TEMPLATE) -> tuple[list[str],
     return errors, warns
 
 
+def check_diagram_editability(flat: list[dict], deck: Path) -> tuple[list[str], list[str]]:
+    """Prove diagram semantics landed as named native objects, not a bitmap."""
+    errors, warns = [], []
+    prs = Presentation(str(deck))
+    for i, (slide, spec) in enumerate(zip(prs.slides, flat), start=1):
+        diagram = spec.get("diagram")
+        if not isinstance(diagram, dict):
+            continue
+        by_name = {shape.name: shape for shape in slide.shapes}
+        names = set(by_name)
+        for node in diagram.get("nodes") or []:
+            expected = f"diagram:node:{node.get('id')}"
+            if expected not in names:
+                errors.append(f"slide {i}: native diagram node {expected!r} is missing")
+            elif not by_name[expected].has_text_frame:
+                errors.append(f"slide {i}: diagram node {expected!r} is not an "
+                              f"editable text-bearing PowerPoint shape")
+        for index, edge in enumerate(diagram.get("edges") or [], start=1):
+            edge_id = edge.get("id") or f"e{index}"
+            expected = f"diagram:edge:{edge_id}"
+            if expected not in names:
+                errors.append(f"slide {i}: native diagram edge {expected!r} is missing")
+            elif edge.get("attached", True):
+                element = by_name[expected]._element
+                if not element.xpath(".//a:stCxn") or not element.xpath(".//a:endCxn"):
+                    errors.append(f"slide {i}: diagram edge {expected!r} is not "
+                                  f"attached to both endpoint nodes")
+        for index, group in enumerate(diagram.get("groups") or [], start=1):
+            group_id = group.get("id") or index
+            expected = f"diagram:group:{group_id}"
+            if expected not in names:
+                errors.append(f"slide {i}: native diagram group {expected!r} is missing")
+        if not any(name.startswith("diagram:node:") for name in names):
+            errors.append(f"slide {i}: diagram has no editable PowerPoint node shapes")
+    return errors, warns
+
+
 def ghost_deck(flat: list[dict]) -> str:
     """Minto's horizontal logic: the claims alone must tell the whole story."""
     lines = []
@@ -445,6 +511,9 @@ def main() -> None:
         e2, w2 = check_deck(Path(a.deck))
         errors += e2
         warns += w2
+        e3, w3 = check_diagram_editability(flatten(outline), Path(a.deck))
+        errors += e3
+        warns += w3
 
     flat = flatten(outline)
     if a.review:

@@ -41,6 +41,21 @@ Debian:  sudo apt install poppler-utils ffmpeg libreoffice
 `markitdown` is only needed to read existing decks; `ffmpeg`/`ffprobe` only to
 embed video. MinerU is optional and never required.
 
+## What changed in v2.4.0
+
+**Editable diagrams, not diagram pictures.** `outline.json` now accepts a
+`diagram` object with native nodes, directed edges, edge labels, groups and
+LR/RL/TB/BT auto-layout. `compose.py` emits separate PowerPoint shapes and
+connectors with stable Selection Pane names; `qa_check.py` verifies every
+declared object survived as native slide content. The weekly smoke-test deck
+exercises this path.
+
+The defaults follow the lab's hand-built figures rather than a generic AI-card
+theme: square process boxes, semantic decision/terminator/database shapes,
+neutral fills, thin grey connectors, no shadow or gradient, and ACM red only
+for the one focal node. Comparison matrices remain native tables and now size
+columns from their contents instead of dividing every column equally.
+
 ## What changed in v2.3.0
 
 **Video works.** `outline.json` had no `video` field, so the only route in was

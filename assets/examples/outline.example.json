@@ -59,18 +59,26 @@
       "role": "project_pipeline",
       "title": "Outline in, template-conformant deck out",
       "subtitle": "Four stages, each with one thing it guarantees",
-      "layout": "text-only",
-      "matrix": {
-        "header": ["Stage", "Input", "What it guarantees"],
-        "rows": [
-          ["Outline", "what to say", "roles and bullets, never geometry"],
-          ["Assemble", "outline.json", "layout and breadcrumb inherited, not rebuilt"],
-          ["Fill", "cloned slides", "fonts, tiers and table styling survive"],
-          ["QA", "deck", "schema-valid, no overflow, no leftovers"]
+      "layout": "figure-full",
+      "diagram": {
+        "direction": "LR",
+        "nodes": [
+          {"id": "outline", "text": "Outline\nwhat to say", "kind": "terminator"},
+          {"id": "assemble", "text": "Assemble\nclone template roles", "kind": "process"},
+          {"id": "fill", "text": "Fill\npreserve type + tables", "kind": "process"},
+          {"id": "qa", "text": "QA\nvalidate + inspect", "kind": "terminator", "accent": true}
         ],
-        "highlight_row": 2
+        "edges": [
+          {"from": "outline", "to": "assemble", "label": "outline.json"},
+          {"from": "assemble", "to": "fill", "label": "cloned slides"},
+          {"from": "fill", "to": "qa", "label": ".pptx"}
+        ],
+        "groups": [
+          {"id": "builder", "label": "Template-preserving builder", "nodes": ["assemble", "fill"]}
+        ],
+        "caption": "Every box, label and arrow is a native editable PowerPoint object."
       },
-      "notes": "四個階段分開的原因是每一段只保證一件事，出錯時很容易定位。第二階段是關鍵：投影片是從範本複製出來的，不是重畫的，所以麵包屑和色條一定對。如果被問為什麼不用 pptxgenjs，答案就是從零生成做不出實驗室這個版型。"
+      "notes": "四個階段分開的原因是每一段只保證一件事，出錯時很容易定位。圖中的每個方塊、標籤與箭頭都能在 PowerPoint 裡直接修改。第二階段是關鍵：投影片是從範本複製出來的，不是重畫的，所以麵包屑和色條一定對。"
     },
     {
       "role": "project_results",

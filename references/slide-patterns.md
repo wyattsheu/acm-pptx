@@ -6,9 +6,10 @@ reads and the layouts it computes. **Never write coordinates into the
 outline** — name a layout and the regions are derived, which is how overlap
 is avoided.
 
-Diagrams and plots can be generated as assets and passed through `figure`;
-there is no separate `diagram` or `chart` field. The fields below show API
-options, not a checklist to fill on every slide.
+New workflows, pipelines and architecture diagrams use native editable
+PowerPoint shapes through `diagram`. Plots and source figures remain assets
+passed through `figure`. The fields below show API options, not a checklist to
+fill on every slide.
 
 ## Fields added to a slide entry
 
@@ -46,6 +47,25 @@ options, not a checklist to fill on every slide.
     {"type": "label", "at": [0.02, 0.38], "text": "334 IDs x 16 views"}   // resizing
   ],
 
+  "diagram": {                              // OR a native editable flowchart
+    "direction": "LR",                     // LR, RL, TB or BT
+    "nodes": [
+      {"id": "input", "text": "Sensor frame", "kind": "terminator"},
+      {"id": "filter", "text": "Filter", "kind": "process"},
+      {"id": "valid", "text": "Valid?", "kind": "decision"},
+      {"id": "plan", "text": "Plan", "kind": "process", "accent": true}
+    ],
+    "edges": [
+      {"from": "input", "to": "filter"},
+      {"from": "filter", "to": "valid"},
+      {"from": "valid", "to": "plan", "label": "yes"}
+    ],
+    "groups": [
+      {"id": "perception", "label": "Perception", "nodes": ["input", "filter"]}
+    ],
+    "caption": "Editable system path; red marks the component discussed here."
+  },
+
   "matrix": {                               // a comparison table you build,
     "header": ["Method", "Duration", "PSNR", "CSIM"],   // not a screenshot
     "rows": [["CAP4D", "400 min", "19.478", "0.7064"],
@@ -80,6 +100,37 @@ options, not a checklist to fill on every slide.
 `callout` also accepts a bare string. `figure` and `video` also accept a bare
 path, but then they have no caption and no source, so `qa_check.py` will
 complain.
+
+## Native editable diagrams
+
+Use `diagram` for a workflow, dependency path, state transition or simplified
+architecture that you are authoring. Every node, connector, edge label and
+group frame becomes a separate PowerPoint object, named in the Selection Pane
+as `diagram:node:*`, `diagram:edge:*`, `diagram:label:*` or `diagram:group:*`.
+The user can edit text, recolour shapes and reroute arrows without rebuilding.
+
+Supported node kinds are `process`, `rect`, `rounded`, `decision`,
+`terminator`, `circle`, and `database`. Use them semantically, not for variety.
+`accent: true` gives the one focal node the lab red outline. Optional `fill`,
+`line`, `text_color`, `size`, and `bold` override a node only when the content
+requires it. Edges accept `label`, `dashed`, `arrow`, `color`, and `width`.
+Their endpoints attach to the nodes, so moving a node in PowerPoint carries the
+connector with it; set `"attached": false` only when reproducing an unusual
+route that must stay fixed.
+
+Automatic layout handles small diagrams in LR/RL/TB/BT directions. Keep a
+single slide to roughly 4–8 nodes; 20 nodes and 32 edges are hard limits, not
+targets. When one node needs adjustment, add normalized `"at": [x,y,w,h]`
+coordinates (0–1 inside the diagram region) to that node; avoid manually
+positioning every node unless reproducing a source exactly.
+
+Style is intentionally restrained: square process boxes, one neutral fill,
+thin grey arrows, no shadows or gradients, and one red focus at most. This
+matches the lab decks' hand-built box-and-arrow figures and avoids the generic
+generated look of pastel cards, ornamental icons and equal emphasis everywhere.
+Use `figure` instead for paper originals, plots, photographs, screenshots and
+experimental imagery. Never render a new Mermaid/Graphviz/matplotlib workflow
+to a bitmap merely to place it on the slide.
 
 ## Video
 
@@ -158,7 +209,7 @@ it once keeps it out of every slide entry.
 
 ## Layouts
 
-| `layout` | Body | Figure | Use for |
+| `layout` | Body | Exhibit | Use for |
 |---|---|---|---|
 | `text-only` | full width | — | contributions, takeaways, a `matrix` slide |
 | `figure-right` | left half, left-aligned | right half, vertically centred | one method component + its diagram |
@@ -167,7 +218,7 @@ it once keeps it out of every slide entry.
 | `figure-full` | cleared | whole content region | qualitative comparison grids |
 | `assertion-evidence` | forbidden | whole content region | a slide that makes exactly one point |
 
-A `video` is placed by the same table; read the "Figure" column as "exhibit".
+`video` and `diagram` are placed by the same table.
 
 Adding a `callout` automatically shortens the content region by 0.96in.
 Adding a `subtitle` pushes it down 0.06in. You do not adjust for either.
@@ -206,7 +257,7 @@ The machine-checkable half of this file. `qa_check.py` applies it by role:
 
 | role | required | severity |
 |---|---|---|
-| `paper_method`, `paper_results` | an exhibit (figure, video, matrix, equation or stage) | error |
+| `paper_method`, `paper_results` | an exhibit (figure, video, diagram, matrix, equation or stage) | error |
 | `project_results`, `research_results` | an exhibit | error |
 | `paper_related` | an exhibit; explain the limitation in the claim, caption or notes | warning |
 | `paper_intro` | an exhibit | warning |
@@ -234,8 +285,12 @@ after looking at the render; the script only lays the evidence out.
   aligned examples for visible differences, diagrams for mechanisms, plots for
   trends or tradeoffs. Use `matrix` for compact lookup across shared criteria,
   with `highlight_row` when a row is the focus. See `evidence-selection.md`.
-- **A pipeline or architecture** → cropped figure, `figure-right`, with a
-  `box` annotation on the component this slide is about.
+- **A pipeline or architecture you author** → native `diagram`, usually
+  `figure-right` beside the explanation or `figure-full` when the topology is
+  the whole argument. Use `accent` on the component this slide is about.
+- **A pipeline quoted from a paper** → crop the original as `figure-right`,
+  with a `box` annotation; redraw with `diagram` only when explicitly adapting
+  and simplifying it, and say so in the caption and notes.
 - **The same figure across several slides** → reuse the same `src` and move
   the annotation. Both reference decks do this: one taxonomy figure appears on
   four consecutive slides with a red dashed box on a different column each
