@@ -36,6 +36,8 @@ shatters it into fragments.
 ## Shape of the deck
 
 Rebuild the paper as an argument. Do not walk its sections in order.
+The allocation below is an example, not a required slide count. Spend time on
+the mechanisms and evidence this paper needs; do not pad sections to match it.
 
 | Section | Slides | Time | Role |
 |---|---|---|---|
@@ -53,34 +55,32 @@ Measured against the two decks in `reference-decks.md`: 26 slides split
 
 ## Where the argument lives
 
-The template's titles are section labels (`Proposed Method`,
-`Experimental Results`) and both reference decks leave them that way. The
-claim goes in two other places, on every content slide:
-
-- **`subtitle`** — the red line under the title. One statement.
-  `Nobody has both good initialization and good supervision`, not
-  `Comparison of prior work`.
-- **`callout`** — the boxed line at the bottom. The "so what" the audience
-  should leave with. `Key idea:`, `Limitation:`, `Evidence:` as the label.
-
-Run the ghost deck test on the **subtitles**, not the titles. Read them in
-sequence; they must carry the whole argument alone.
+Put the claim in the title, or in a subtitle when the title is a section label.
+Use callouts sparingly at a turning point; they are not a required field.
+Read titles and their claim-bearing subtitles in sequence to test the argument.
 
 ## Per-section requirements
 
 **Method slides.** For each component answer four questions: what does it
 receive, what does it do, what does it produce, why is it needed. Naming
 modules without design logic is the failure mode named in the handbook. One
-component per slide, its figure on the right.
+component per slide. Use the original architecture crop with a highlighted
+path, or an explicitly adapted diagram showing inputs, transformations and
+outputs. Use full width when the mechanism would be cramped in a half-slide.
 
 **Evidence slides.** A quantitative slide answers a claim; an ablation slide
 answers why the method works. Name the metric, the strongest relevant
-baseline, the decisive values, and the exact conclusion supported. Put the
-numbers in a `matrix` with `highlight_row` on the paper's own method — never
-paste a screenshot of the paper's table, its font is print-sized.
+baseline, the decisive values, and the exact conclusion supported. Choose the
+visual from the question: a curve for convergence, a scatter plot for a
+quality/cost tradeoff, paired image crops for visual quality, or a compact
+`matrix` when exact cross-metric lookup matters. A readable crop of a paper
+plot or table is valid; trim irrelevant rows or panels without losing labels,
+conditions or caveats. Re-plot only from verified values. See
+`evidence-selection.md` for extraction and provenance.
 
 **Three statement types stay visibly separate**: author claim, evidence,
-presenter interpretation. In the callout, label which one it is. In the notes,
+presenter interpretation. Label interpretations in the title, caption or body
+where needed; this does not require a box. In the notes,
 say "作者宣稱…" versus "我的看法是…".
 
 **The ending.** Three takeaways, strengths, weaknesses, limitations split into
@@ -100,30 +100,16 @@ and your answer**. That is what the meeting is actually for.
 
 ## Workflow
 
-```bash
-# 1. read the PDF, propose the outline — titles, subtitles, exhibit per slide
-#    STOP HERE and get it confirmed. Any deck over 10 slides gets confirmed
-#    before a single slide is built.
-
-# 2. figures
-python scripts/figure.py list --mineru out/paper/auto
-python scripts/figure.py crop --pdf paper.pdf --mineru out/paper/auto --index 3 -o figs/fig3.png
-
-# 3. build
-python scripts/build_from_outline.py outline.json -o talk.pptx
-python scripts/compose.py outline.json talk.pptx
-
-# 4. gate
-python scripts/qa_check.py outline.json talk.pptx
-python scripts/office/validate.py talk.pptx --original assets/acm_template.pptx
-
-# 5. look at it
-python scripts/office/soffice.py --headless --convert-to pdf talk.pptx
-rm -f slide-*.jpg && pdftoppm -jpeg -r 150 talk.pdf slide
-```
-
-Render at 150 dpi or higher. At 100 dpi JPEG artifacts look like stray shapes
-and you will chase bugs that are not there.
+1. Read the original PDF and inspect its architecture, result and ablation
+   figures before drafting the outline. Map selected panels to claims and
+   retain page, figure number, caption and source.
+2. Crop the selected evidence with `figure.py`; inspect the crops before
+   choosing a layout. Use `evidence-selection.md` to decide what to preserve,
+   annotate or redraw. Missing assets are not a reason to substitute prose tables.
+3. Propose titles, claim-bearing subtitles where needed, and the actual exhibit
+   for each slide. Follow `SKILL.md` for outline confirmation.
+4. Build, compose and run the QA loop in `SKILL.md`. Inspect individual renders
+   of dense figures; contact sheets alone cannot verify embedded axis labels.
 
 ## Never
 

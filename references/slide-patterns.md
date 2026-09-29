@@ -6,6 +6,10 @@ reads and the layouts it computes. **Never write coordinates into the
 outline** — name a layout and the regions are derived, which is how overlap
 is avoided.
 
+Diagrams and plots can be generated as assets and passed through `figure`;
+there is no separate `diagram` or `chart` field. The fields below show API
+options, not a checklist to fill on every slide.
+
 ## Fields added to a slide entry
 
 ```jsonc
@@ -204,10 +208,10 @@ The machine-checkable half of this file. `qa_check.py` applies it by role:
 |---|---|---|
 | `paper_method`, `paper_results` | an exhibit (figure, video, matrix, equation or stage) | error |
 | `project_results`, `research_results` | an exhibit | error |
-| `paper_related` | an exhibit, and a `callout` naming the limitation | warning |
+| `paper_related` | an exhibit; explain the limitation in the claim, caption or notes | warning |
 | `paper_intro` | an exhibit | warning |
 | `paper_conclusion` | `bullets` (the takeaways) | warning |
-| every content slide | a claim in `subtitle` or `callout` | error |
+| every content slide | a claim in title, subtitle or callout | error |
 
 ## Reviewing the deck
 
@@ -226,8 +230,10 @@ after looking at the render; the script only lays the evidence out.
 
 ## When to use which exhibit
 
-- **Comparison across methods or camps** → `matrix`, `highlight_row` on the
-  row you are arguing for. Not a figure of the paper's table.
+- **Comparison across methods or camps** → choose the relationship first:
+  aligned examples for visible differences, diagrams for mechanisms, plots for
+  trends or tradeoffs. Use `matrix` for compact lookup across shared criteria,
+  with `highlight_row` when a row is the focus. See `evidence-selection.md`.
 - **A pipeline or architecture** → cropped figure, `figure-right`, with a
   `box` annotation on the component this slide is about.
 - **The same figure across several slides** → reuse the same `src` and move

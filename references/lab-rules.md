@@ -128,8 +128,8 @@ as a written summary — if it cannot be said out loud comfortably, rewrite it.
 claim that can be carried convincingly in the time available; everything else
 is appendix material. A deck that covers three things well convinces of none.
 
-**Ghost deck test.** Extract every `subtitle` (the red claim line), read them
-in sequence, ignore titles and bodies. They must tell the whole argument on
+**Ghost deck test.** Read the titles in sequence, using a claim-bearing
+`subtitle` where the title is a section label. They must tell the whole argument on
 their own. If the sequence is merely a list of topics, they are labels, not
 claims — rewrite before building the deck.
 
@@ -148,9 +148,10 @@ unnecessary; failing the second means it needs annotation.
 whose point collapses without narration needs a stronger annotation or a
 sharper title.
 
-**Rebuild figures, don't screenshot them.** Paper figures carry print-sized
-fonts and captions that will not survive projection. Rebuild at presentation
-scale, axis labels 16pt or larger.
+**Make source figures readable.** Crop and enlarge the relevant paper panels,
+retain their legends and cite them. Preserve original qualitative results.
+Re-plot from verified data when helpful, with axis labels 16pt or larger;
+label simplified mechanism diagrams as adaptations. See `evidence-selection.md`.
 
 **Bold and italics carry meaning, not decoration.** Bold for a key term on
 first use, inline labels (`Note:`, `Limitation:`), and the focal number.

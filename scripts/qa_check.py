@@ -39,7 +39,7 @@ EXHIBIT_KEYS = ("figure", "video", "matrix", "equation", "stage", "table")
 ROLE_SCHEMA = {
     "paper_method":     {"exhibit": "error"},
     "paper_results":    {"exhibit": "error"},
-    "paper_related":    {"exhibit": "warn", "callout": "warn"},
+    "paper_related":    {"exhibit": "warn"},
     "paper_intro":      {"exhibit": "warn"},
     "paper_conclusion": {"bullets": "warn"},
     "project_results":  {"exhibit": "error"},
@@ -412,10 +412,14 @@ Now score the deck yourself on the three dimensions PPTEval uses, because none
 of the checks above can see any of them:
 
   Content    Is each claim actually supported by the exhibit on its own slide?
-             Any number, baseline or dataset stated that the paper does not?
+             Any number, baseline or dataset stated that the source does not?
+             Does a results slide show an actual observation, not just status?
+             Can borrowed panels and replotted values be traced to their source?
   Design     Render the deck and look. Crowding, unreadable axis labels, a
              figure that needed a tighter crop, an annotation covering the
-             thing it points at.
+             thing it points at. Does each matrix need row/column lookup,
+             or would a diagram, plot or paired result image explain more?
+             Check figure labels at slide size, not only on a contact sheet.
   Coherence  Read the claim sequence above as a single paragraph. Does each
              claim follow from the one before? Where does it jump?
 

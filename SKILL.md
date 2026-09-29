@@ -12,7 +12,9 @@ metadata:
 The lab template is the only source of visual truth. Every slide in
 `assets/acm_template.pptx` carries its own layout with the section colour bar
 and the breadcrumb strip already positioned. **Never rebuild a slide — clone
-the template slide whose role matches, then replace the text.**
+the template slide whose role matches, then compose the content inside it.**
+The template fixes the lab identity, not the form of the explanation. Choose
+the evidence first; a table is one option, not the default content layout.
 
 ## Which track
 
@@ -87,12 +89,19 @@ compute, so never hand-patch a `.pptx` to dodge a rebuild. A rendered slide is
 
 ## Before you write the outline
 
+Inspect the available paper figures, plots, logs, screenshots and demo clips
+before assigning layouts. Read `references/evidence-selection.md` for diagram,
+experiment and paper-figure workflows. For each main claim, identify the actual
+source and the visual relationship the audience needs to see. A text-filled
+`matrix` does not become evidence merely because QA accepts it.
+
+
 1. **Ask before inventing content.** If the user has not said what they did
    this week, ask. Never fabricate experimental numbers, metrics, or paper
    results.
 2. **Get the outline confirmed before building anything over 10 slides.**
-   Titles, subtitles, and which exhibit sits on each slide. A paper talk is
-   always over 10 slides, so it is always confirmed first.
+   Titles, subtitles, and which exhibit sits on each slide. Apply this to the
+   actual deck length; paper talks can also be short.
 3. **Ghost deck test on the titles.** Read the `title` lines in sequence, with
    a `subtitle` standing in wherever the title is a bare section label. They
    must carry the whole argument alone. If they read as a list of topics —
@@ -109,10 +118,11 @@ Include only the tracks that have real content; for an empty track use its
 | Weekly report, project only | `cover`, `summary`, `project_summary` … `project_conclusion` |
 | Weekly report, research only | `cover`, `summary`, `research_summary` … `research_conclusion` |
 | Both tracks | project block then research block; one `summary` at the front |
-| Paper study | `cover`, `paper_intro` ×5, `paper_related` ×5, `paper_method` ×7, `paper_results` ×6, `paper_conclusion` |
+| Paper study | `cover`, then repeat `paper_intro`, `paper_related`, `paper_method`, `paper_results` as needed; `paper_conclusion` |
 | Anything else | `others` |
 
-Roles repeat by design — the breadcrumb stays on the right section.
+Roles repeat by design — the breadcrumb stays on the right section. Section
+counts follow the material and speaking time, not a fixed quota.
 
 ## Writing the content
 
@@ -137,11 +147,14 @@ Roles repeat by design — the breadcrumb stays on the right section.
 - **One idea per slide**, ~40 words of body text as a hard ceiling. The cap
   covers slide body only — never captions, annotations, or notes.
 - **One exhibit per slide, annotated.** Mark the decisive point on the figure
-  itself. A deck where more than ~15% of content slides carry no exhibit has
-  drifted back into being an outline.
-- **Rebuild figures, don't screenshot them.** Paper figures carry print-sized
-  fonts. Crop at 300 dpi with `scripts/figure.py`; re-plot from raw numbers
-  when you have them, with axis labels 16pt or larger.
+  itself. Review text-only stretches for missing evidence; do not add a decorative
+  table just to meet an exhibit quota. A coordinated before/after pair or
+  multi-panel comparison can be one exhibit.
+- **Preserve useful source figures.** Crop and enlarge paper architecture
+  figures, qualitative panels and plots with `scripts/figure.py` at 300 dpi;
+  retain legends and cite the source. Re-plot when verified data is available
+  and it improves the explanation, with axis labels 16pt or larger. Label
+  simplified diagrams as adaptations; do not recreate experimental imagery.
 - **Video only for claims a still cannot make** — tracking jitter, temporal
   flicker, a robot finishing the task. See §Video below; everything else is a
   figure.
@@ -247,7 +260,8 @@ Work the loop this way:
 `--contact N` tiles N slides into one image. An image costs ~1600 tokens
 whatever it holds, so a 25-slide deck reviewed as contact sheets is ~13k
 instead of ~40k. Read a sheet for balance and layout, not for caption text —
-captions are what `qa_check.py` already checked without an image.
+open individual slides for figure labels, legends and citations that are too
+small on the sheet. XML checks cannot read text embedded in a paper figure.
 
 `--dpi` defaults to 110, legible down to figure captions. Going above it buys
 no detail: a 13.333in slide is downscaled to 1568px on its long edge
