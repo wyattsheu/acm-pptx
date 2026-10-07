@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -37,10 +38,10 @@ import exhibits
 # ---------------------------------------------------------------- palette
 RED = RGBColor(0xC0, 0x00, 0x00)      # claim line, callout frame, annotations
 GREY = RGBColor(0x59, 0x59, 0x59)     # captions
-HEAD_BG = RGBColor(0x3E, 0x4A, 0x5B)  # matrix header
 HEAD_FG = RGBColor(0xFF, 0xFF, 0xFF)
-ROW_HI = RGBColor(0xE8, 0xF2, 0xE1)   # the "Ours" row
-COL_HI = RGBColor(0xF6, 0xF1, 0xE4)   # the decisive metric column
+# matrix head, banding and the decisive column come from the section colour
+# (exhibits.tones); the "Ours" row is pale red, the lab's one focus colour
+ROW_HI = RGBColor.from_string(exhibits.RED_PALE)
 BAND = RGBColor(0xF2, 0xF2, 0xF2)     # equation band
 DIAGRAM_FILL = RGBColor(0xFA, 0xFA, 0xFA)
 DIAGRAM_LINE = RGBColor(0x5B, 0x67, 0x78)
@@ -61,7 +62,8 @@ CAPTION_H = 0.34
 GUTTER = 0.30
 LEFT, RIGHT = 0.92, 12.42          # body text column
 BLEED_L, BLEED_R = 0.62, 12.72     # figures may run wider than text
-STAGE_H = 1.60                     # the recurring pipeline strip, pinned top-right
+SETTLE = 0.40     # share of the left-over height that goes above a short group
+STACK_GAP = 0.28  # between the bullets and the exhibit under them
 ASSERT = (0.92, 1.16, 11.50, 0.88)  # assertion-evidence: the sentence headline
 ASSERT_TOP = 2.10                   # evidence starts below it
 DIVIDER = RGBColor(0xC8, 0xCC, 0xD2)
@@ -97,15 +99,21 @@ BODY_PT = 20                 # the template's body size
 LINE_H = BODY_PT * 1.25 / 72  # inches per line
 
 
-def body_lines(spec: dict, width: float) -> int:
-    """How many lines the bullets take at the template's 20pt in `width` inches."""
-    per_line = max(1.0, width * 72 / (BODY_PT * 0.55))
+def body_lines(spec: dict, width: float, pt: float = BODY_PT) -> int:
+    """How many lines the bullets take at `pt` (the template's 20pt) in `width` inches.
+
+    Measured with the deck's own face (measure.py); the old flat 0.55em guess
+    called a 44-character bullet two lines when it is one, and every such
+    miss left a hole under the text block it was used to place. The body box
+    loses 0.2in to its insets and 0.44in to the hanging bullet.
+    """
+    import measure
     n = 0
     for b in spec.get("bullets") or []:
         text = b["text"] if isinstance(b, dict) else str(b)
         level = int(b.get("level", 0)) if isinstance(b, dict) else 0
-        ems = sum(1.0 if cjk.has_cjk(ch) else 0.55 for ch in text) / 0.55
-        n += max(1, -(-int(ems) // int(per_line - 4 * level)))
+        bold = bool(b.get("bold")) if isinstance(b, dict) else False
+        n += max(1, measure.lines(text, max(0.5, width - 0.64 - 0.40 * level), pt, bold))
     return n
 
 
@@ -219,6 +227,7 @@ def textbox(slide, box, text, size, *, color=None, bold=False, italic=False,
     run = p.add_run()
     run.text = text
     run.font.size = Pt(size)
+    run.font.name = exhibits.FONT
     run.font.bold = bold
     run.font.italic = italic
     if color is not None:
@@ -540,7 +549,7 @@ def add_callout(slide, spec) -> None:
     r.font.color.rgb = RGBColor(0x1A, 0x1A, 0x1A)
 
 
-def add_matrix(slide, spec, box) -> None:
+def add_matrix(slide, spec, box, accent: str = exhibits.SECTION["others"]) -> None:
     """A comparison table sized to the room it has, not to a fixed 12.5pt.
 
         "matrix": {
@@ -563,6 +572,10 @@ def add_matrix(slide, spec, box) -> None:
     hi_rows = m.get("highlight_row")
     hi_rows = set(hi_rows if isinstance(hi_rows, list) else ([hi_rows] if hi_rows else []))
     hi_col = m.get("highlight_col")
+    t = exhibits.tones(accent)
+    head_bg = RGBColor.from_string(t["dark"])
+    band = RGBColor.from_string(t["wash"])
+    col_hi = RGBColor.from_string(exhibits.tint(accent, 0.80))
     x, y, w, h = box
     n_rows, n_cols = len(rows) + 1, len(header)
 
@@ -570,7 +583,7 @@ def add_matrix(slide, spec, box) -> None:
     size = m.get("size")
     if size is None:
         size = 18 if n_rows <= 4 else 16 if n_rows <= 6 else 14 if n_rows <= 9 else 12
-    row_h = max(0.36, min(0.62, size * 2.3 / 72))
+    row_h = max(0.36, min(0.70, size * 2.5 / 72))
     cap_h = 0.32 if m.get("caption") else 0
     height = row_h * n_rows
     avail = h - cap_h
@@ -607,7 +620,7 @@ def add_matrix(slide, spec, box) -> None:
         cell = table.cell(0, c)
         cell.text = str(txt)
         cell.fill.solid()
-        cell.fill.fore_color.rgb = HEAD_BG
+        cell.fill.fore_color.rgb = head_bg
         _style_cell(cell, size, bold=True, color=HEAD_FG,
                     align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
     for r, row in enumerate(rows, start=1):
@@ -622,14 +635,19 @@ def add_matrix(slide, spec, box) -> None:
                 _style_cell(cell, size, bold=True, color=RED, align=PP_ALIGN.CENTER)
             elif lit_row:
                 cell.fill.solid(); cell.fill.fore_color.rgb = ROW_HI
-                _style_cell(cell, size, bold=True,
+                _style_cell(cell, size, bold=True, color=RED if c == 0 else None,
                             align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
             elif lit_col:
-                cell.fill.solid(); cell.fill.fore_color.rgb = COL_HI
+                cell.fill.solid(); cell.fill.fore_color.rgb = col_hi
                 _style_cell(cell, size, bold=False,
                             align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
             else:
-                cell.fill.background()
+                # banded rows in the section's wash keep a wide row readable
+                # across the slide without a grid of rules
+                if r % 2 == 0:
+                    cell.fill.solid(); cell.fill.fore_color.rgb = band
+                else:
+                    cell.fill.background()
                 _style_cell(cell, size, bold=(c == 0),
                             align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
     if m.get("caption"):
@@ -715,12 +733,16 @@ def _diagram_boxes(diagram: dict, box) -> dict[str, tuple[float, float, float, f
 
     if horizontal:
         cell_w, cell_h = w / primary_count, h / secondary_count
-        node_w = max(0.72, min(1.85, cell_w * 0.72))
+        node_w = max(0.72, min(2.30, cell_w * 0.74))
         node_h = max(0.42, min(0.78, cell_h * 0.56))
     else:
         cell_w, cell_h = w / secondary_count, h / primary_count
-        node_w = max(0.82, min(2.15, cell_w * 0.70))
+        node_w = max(0.82, min(2.40, cell_w * 0.70))
         node_h = max(0.42, min(0.78, cell_h * 0.56))
+    # one height for every node, tall enough for the wordiest label: a fixed
+    # 0.78in box let a three-line label spill over its frame
+    need = max(_node_text_height(n, node_w) for n in nodes)
+    node_h = max(node_h, min(need, cell_h * 0.92))
 
     out = {}
     for node in nodes:
@@ -754,6 +776,22 @@ def _diagram_boxes(diagram: dict, box) -> dict[str, tuple[float, float, float, f
             nw = nh = side
         out[node_id] = (cx - nw / 2, cy - nh / 2, nw, nh)
     return out
+
+
+def _node_lines(node) -> list[tuple[str, float, bool]]:
+    """`text` split on newlines: the first line is the node's name, the rest
+    a smaller second line -- what it does, what it guarantees."""
+    size = float(node.get("size", 16))
+    parts = str(node.get("text") or node.get("id")).split("\n")
+    bold = bool(node.get("bold", node.get("accent") or len(parts) > 1))
+    return [(parts[0], size, bold)] + [(t, max(10.0, size - 3), False) for t in parts[1:]]
+
+
+def _node_text_height(node, width: float) -> float:
+    import measure
+    inner = width * (0.78 if node.get("kind") in ("terminator", "decision", "circle") else 0.94) - 0.12
+    return 0.22 + sum(max(1, measure.lines(t, inner, pt, b)) * pt * 1.18 / 72
+                      for t, pt, b in _node_lines(node))
 
 
 def _edge_points(source, target, direction: str):
@@ -892,13 +930,15 @@ def add_diagram(slide, spec, box) -> None:
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
         tf.margin_left = tf.margin_right = Inches(0.06)
         tf.margin_top = tf.margin_bottom = Inches(0.03)
-        p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.CENTER
-        r = p.add_run()
-        r.text = str(node.get("text") or node_id)
-        r.font.size = Pt(float(node.get("size", 16)))
-        r.font.bold = bool(node.get("bold", accent))
-        r.font.color.rgb = _rgb(node.get("text_color"), DIAGRAM_TEXT)
+        for li, (text, pt, bold) in enumerate(_node_lines(node)):
+            p = tf.paragraphs[0] if li == 0 else tf.add_paragraph()
+            p.alignment = PP_ALIGN.CENTER
+            r = p.add_run()
+            r.text = text
+            r.font.size = Pt(pt)
+            r.font.bold = bold
+            r.font.color.rgb = _rgb(node.get("text_color"),
+                                    DIAGRAM_TEXT if li == 0 else GREY)
 
     # Attach endpoints after every node exists. The connector was inserted
     # first, so it stays visually behind the nodes while still following them
@@ -916,7 +956,9 @@ def add_diagram(slide, spec, box) -> None:
             connector.end_connect(node_shapes[edge["to"]], end_idx)
 
     if cap_text:
-        caption(slide, (x, y + h + 0.05, w, CAPTION_H), str(cap_text))
+        # under the drawing, not under the empty canvas it was laid out in
+        low = max(b[1] + b[3] for b in boxes.values())
+        caption(slide, (x, min(low + 0.30, y + h + 0.05), w, CAPTION_H), str(cap_text))
 
 
 def _style_cell(cell, size, *, bold=False, color=None, align=PP_ALIGN.LEFT):
@@ -926,6 +968,7 @@ def _style_cell(cell, size, *, bold=False, color=None, align=PP_ALIGN.LEFT):
         p.alignment = align
         for r in p.runs:
             r.font.size = Pt(size)
+            r.font.name = exhibits.FONT
             r.font.bold = bold
             if color is not None:
                 r.font.color.rgb = color
@@ -1019,15 +1062,16 @@ def add_stage(slide, spec, stage_figure, box) -> None:
             f"stage {name!r} box {at} runs past the picture edge: stages are "
             f"[x, y, w, h] fractions; for corners write {{\"xyxy\": [x0, y0, x1, y1]}}")
 
-    x, y, w, _ = box
+    x, y, w, h = box
     iw, ih = Image.open(src).size
-    rect = fit((x, y, w, STAGE_H), iw, ih, vcenter=False)
+    cap = 0.30 if stage_figure.get("caption") else 0.0
+    rect = fit((x, y, w, h - cap), iw, ih, vcenter=False)
     slide.shapes.add_picture(str(src), Inches(rect[0]), Inches(rect[1]),
                              Inches(rect[2]), Inches(rect[3]))
     add_annotations(slide, {"annotations": [
         {"type": "box", "at": at, "color": stage_figure.get("color", "C00000")}]}, rect)
     if stage_figure.get("caption"):
-        caption(slide, (x, rect[1] + rect[3] + 0.04, w, 0.24), stage_figure["caption"], 10)
+        caption(slide, (x, rect[1] + rect[3] + 0.04, w, 0.26), stage_figure["caption"], 11)
 
 
 OURS_BOX = (0.92, 6.90, 1.9, 0.26)   # bottom-left, clear of the page number
@@ -1077,6 +1121,171 @@ def add_divider(slide, reg) -> None:
                                       Inches(x), Inches(bottom - 0.05))
     line.line.color.rgb = DIVIDER
     line.line.width = Pt(1.0)
+
+
+# ---------------------------------------------------------------- balance
+
+SPARSE_LINES = 6        # a text-only slide this short gets larger, airier type
+SPARSE_PT = 22
+SPARSE_GAP = 14         # pt before each paragraph
+
+
+def _airy_text(body, spec, reg) -> float | None:
+    """A text-only slide with three short bullets used to be three 20pt lines
+    under the title and a blank lower half. Give them 22pt and paragraph air;
+    `settle` then centres them. Returns the point size used, or None."""
+    if (body is None or reg["layout"] != "text-only" or reg["fig"] is not None
+            or not spec.get("bullets") or any(spec.get(k) for k in GRAPHICS + ("equation",))):
+        return None
+    if body_lines(spec, reg["body"][2], SPARSE_PT) > SPARSE_LINES:
+        return None
+    for i, para in enumerate(body.text_frame.paragraphs):
+        if i:
+            para.space_before = Pt(SPARSE_GAP)
+        for r in para.runs:
+            r.font.size = Pt(SPARSE_PT)
+    return SPARSE_PT
+
+
+def _text_height(spec, width: float, pt: float | None) -> float:
+    if not spec.get("bullets"):
+        return 0.0
+    n = body_lines(spec, width, pt or BODY_PT)
+    gaps = (len(spec["bullets"]) - 1) * SPARSE_GAP / 72 if pt else 0.0
+    return 0.22 + n * (pt or BODY_PT) * 1.25 / 72 + gaps
+
+
+def _extent(shapes) -> tuple[float, float] | None:
+    if not shapes:
+        return None
+    tops = [Emu(s_.top).inches for s_ in shapes]
+    return min(tops), max(t + Emu(s_.height).inches for t, s_ in zip(tops, shapes))
+
+
+def _shift(shapes, dy: float) -> None:
+    if abs(dy) < 0.01:
+        return
+    for s_ in shapes:
+        s_.top = Emu(int(s_.top + Inches(dy)))
+
+
+def _shift_body(body, dy: float, floor: float) -> None:
+    """Move the bullets down by `dy`. The box keeps its height unless that
+    would cross `floor` (the region's bottom); then it ends there, which is
+    still taller than the text it was measured for."""
+    if body is None or abs(dy) < 0.01:
+        return
+    body.top = Emu(int(body.top + Inches(dy)))
+    body.height = Emu(max(int(Inches(0.3)),
+                          min(int(body.height), int(Inches(floor)) - int(body.top))))
+
+
+def settle(spec, reg, body, drawn, sparse_pt=None) -> None:
+    """Treat the bullets and the exhibit as one group and place the group.
+
+    Each piece used to be positioned on its own: the text pinned to the top,
+    a short exhibit centred in what was left, so a slide came out as three
+    lines, a two-inch gap, a strip of boxes and another gap. Now a stacked
+    slide closes the gap between text and exhibit, then sits the whole group
+    a little above the centre of the content region; a side-by-side slide
+    gives both columns one shared top. Nothing grows or shrinks -- only moves.
+    `"valign": "top"` on a slide opts out.
+    """
+    span_top, span_bottom = reg["span"]
+    if reg["layout"] == "assertion-evidence":
+        span_top = ASSERT_TOP
+    has_text = body is not None and reg["body"] is not None and bool(spec.get("bullets"))
+    body_top = Emu(body.top).inches if has_text else span_top
+
+    if reg["layout"] in ("figure-right", "figure-left") and reg["fig"] and reg["body"]:
+        fx, _, fw, _ = reg["fig"]
+        bw = reg["body"][2]
+
+        def in_fig(s_):
+            mid = Emu(s_.left).inches + Emu(s_.width).inches / 2
+            return fx - 0.05 <= mid <= fx + fw + 0.05
+
+        fig_side = [s_ for s_ in drawn if in_fig(s_)]
+        text_side = [s_ for s_ in drawn if not in_fig(s_)]
+        t_ext = _extent(text_side)
+        t_top = body_top if has_text else (t_ext[0] if t_ext else span_top)
+        t_bot = max(body_top + _text_height(spec, bw, sparse_pt) if has_text else t_top,
+                    t_ext[1] if t_ext else t_top)
+        f_ext = _extent(fig_side)
+        tallest = max(t_bot - t_top, (f_ext[1] - f_ext[0]) if f_ext else 0.0)
+        top = span_top + max(0.0, (span_bottom - span_top - tallest) * SETTLE)
+        _shift(text_side, top - t_top)
+        if has_text:
+            _shift_body(body, top - t_top, span_bottom)
+        if f_ext:
+            _shift(fig_side, top - f_ext[0])
+        return
+
+    ext = _extent(drawn)
+    width = reg["body"][2] if reg["body"] else RIGHT - LEFT
+    text_bot = body_top + _text_height(spec, width, sparse_pt) if has_text else span_top
+    if ext:
+        gap = STACK_GAP if has_text else 0.0
+        if ext[0] > text_bot + gap:                 # close the hole under the text
+            _shift(drawn, text_bot + gap - ext[0])
+        ext = _extent(drawn)
+    g_top = body_top if has_text else (ext[0] if ext else span_top)
+    g_bot = max(text_bot if has_text else g_top, ext[1] if ext else g_top)
+    free = (span_bottom - span_top) - (g_bot - g_top)
+    if free <= 0.05:
+        return
+    dy = span_top + free * SETTLE - g_top
+    _shift(drawn, dy)
+    if has_text:
+        _shift_body(body, dy, span_bottom)
+
+
+_RPR_AFTER_LATIN = ("ea", "cs", "sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst")
+
+
+def latin_font(prs, font: str = exhibits.FONT) -> int:
+    """Give every run this script drew an explicit Latin face.
+
+    The template's layouts say Calibri and its theme says Arial, so a shape
+    python-pptx adds without a typeface renders in Arial beside Calibri
+    bullets. Template shapes (Google Slides export names) and placeholders
+    already inherit Calibri and are left alone.
+    """
+    from pptx.oxml.ns import qn
+
+    def runs(shape):
+        if shape.shape_type == 6:                                   # group
+            for sub in shape.shapes:
+                yield from runs(sub)
+            return
+        if shape.is_placeholder or shape.name.startswith(("Google Shape", "Shape ")):
+            return
+        if shape.has_text_frame:
+            yield from shape.text_frame._txBody.iter(qn("a:r"))
+        if getattr(shape, "has_table", False):
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    yield from cell.text_frame._txBody.iter(qn("a:r"))
+
+    after = {qn("a:" + n) for n in _RPR_AFTER_LATIN}
+    n = 0
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            for r_el in runs(shape):
+                rPr = r_el.find(qn("a:rPr"))
+                if rPr is None:
+                    rPr = r_el.makeelement(qn("a:rPr"), {})
+                    r_el.insert(0, rPr)
+                if rPr.find(qn("a:latin")) is not None:
+                    continue
+                latin = rPr.makeelement(qn("a:latin"), {"typeface": font})
+                anchor = next((c for c in rPr if c.tag in after), None)
+                if anchor is not None:
+                    anchor.addprevious(latin)
+                else:
+                    rPr.append(latin)
+                n += 1
+    return n
 
 
 # ---------------------------------------------------------------- driver
@@ -1140,8 +1349,9 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
             band = equation_height(eq if isinstance(eq, dict) else {})
             if spec.get("bullets"):
                 band = min(band, bh - 0.9)
-                eq_box = (bx, by + bh - band, bw, band)
-                reg["body"] = (bx, by, bw, bh - band - 0.15)
+                eq_y = max(by + body_strip_height(spec, bw) + 0.15, by + 0.9)
+                eq_box = (bx, min(eq_y, by + bh - band), bw, band)
+                reg["body"] = (bx, by, bw, eq_box[1] - by - 0.05)
             else:
                 eq_box = (bx, by, bw, bh)
                 reg["body"] = (bx, by, 0.4, 0.3)
@@ -1161,6 +1371,8 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
                     for para in body.text_frame.paragraphs:
                         para.alignment = PP_ALIGN.LEFT
 
+        sparse = _airy_text(body, spec, reg)
+        before = {shp.shape_id for shp in slide.shapes}
         if eq_box:
             add_equation(slide, spec, eq_box, outline_dir, str(idx))
 
@@ -1183,7 +1395,7 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
                 raise SystemExit(f"slide {idx}: no room for {kind} in layout {reg['layout']}")
             accent = exhibits.accent_for(spec.get("role", ""))
             if kind == "matrix":
-                add_matrix(slide, spec, gbox)
+                add_matrix(slide, spec, gbox, accent)
             elif kind == "diagram":
                 add_diagram(slide, spec, gbox)
             elif kind == "draw":
@@ -1210,6 +1422,9 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
                                                         "assertion-evidence"))
             if spec.get("annotations"):
                 add_annotations(slide, spec, rect)
+        if not spec.get("custom") and spec.get("valign") != "top" and not spec.get("table"):
+            settle(spec, reg, body,
+                   [shp for shp in slide.shapes if shp.shape_id not in before], sparse)
         if spec.get("divider"):
             add_divider(slide, reg)
         if spec.get("callout"):
@@ -1218,6 +1433,7 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
             add_ours(slide, spec)
 
     out = out or deck
+    latin_font(prs)
     cjk.tag_deck(prs, cjk.font_from_outline(outline))
     prs.core_properties.content_status = STAMP
     prs.save(str(out))

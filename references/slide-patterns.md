@@ -142,7 +142,10 @@ coordinates (0–1 inside the diagram region) to that node; avoid manually
 positioning every node unless reproducing a source exactly.
 
 Style is intentionally restrained: square process boxes, one neutral fill,
-thin grey arrows, no shadows or gradients, and one red focus at most. This
+thin grey arrows, no shadows or gradients, and one red focus at most. Node
+text may carry a second line after `\n`: the first is set bold as the node's
+name, the rest smaller and grey, and every node is as tall as the wordiest
+label needs. This
 matches the lab decks' hand-built box-and-arrow figures and avoids the generic
 generated look of pastel cards, ornamental icons and equal emphasis everywhere.
 Use `figure` instead for paper originals, plots, photographs, screenshots and
@@ -231,7 +234,7 @@ it once keeps it out of every slide entry.
 | `text-only` | full width | — | contributions, takeaways, a `matrix` slide |
 | `figure-right` | left half, left-aligned | right half, vertically centred | one method component + its diagram |
 | `figure-left` | right half | left 48% | when the figure reads left-to-right into the text |
-| `figure-bottom` | top strip, ≤1.85in | full width below, top-aligned | task definition, teaser, wide pipeline figures |
+| `figure-bottom` | top strip, as tall as its lines | full width, right under the text | task definition, teaser, wide pipeline figures |
 | `figure-full` | cleared | whole content region | qualitative comparison grids |
 | `assertion-evidence` | forbidden | whole content region | a slide that makes exactly one point |
 
@@ -245,6 +248,13 @@ overlap.
 
 Adding a `callout` automatically shortens the content region by 0.96in.
 Adding a `subtitle` pushes it down 0.06in. You do not adjust for either.
+
+After everything is drawn, `compose.py` places the content as one group: on a
+stacked slide the exhibit moves up under the bullets and the group sits a
+little above the middle of the region; on a side-by-side slide both columns
+share one top edge. Text-only slides of six lines or fewer are set at 22pt
+with paragraph spacing. `"valign": "top"` on a slide keeps the old top-pinned
+placement.
 
 Geometry, for reference only: title 0.92–2.42in wide band at y 0.33, subtitle
 at y 1.18, content from y 1.72 to 6.80, callout occupies 6.02–6.80, figures
@@ -263,8 +273,8 @@ the number that wins.
 | exhibit | what it is | use it for |
 |---|---|---|
 | `cards` | 2-6 panels, each a heading plus a few lines | the camps in related work; contributions; the four questions about one component; strengths vs weaknesses; what transfers to us vs what does not |
-| `flow` | boxes joined by arrows, one lit | the method overview before the per-component slides; any pipeline you would otherwise type into a table; `"style": "chevron"` for a terser strip, `"direction": "column"` for a vertical one; a linear sequence only, `diagram` (below) handles branches, feedback loops and groups |
-| `bignum` | 1-4 numbers at display size with a label and the baseline | the single result the talk turns on, *before* the full table; each `sub` names what the number beats |
+| `flow` | boxes joined by arrows, one lit, `STEP n` over each, optional `detail` lines under each | the method overview before the per-component slides; any pipeline you would otherwise type into a table; `"style": "chevron"` for a terser strip, `"direction": "column"` for a vertical one; a linear sequence only, `diagram` (below) handles branches, feedback loops and groups |
+| `bignum` | 1-4 numbers at display size with a label and the baseline, tiles ≤2.7in tall | the single result the talk turns on, *before* the full table; each `sub` names what the number beats; give it a one-bullet lead-in and a `caption` naming the benchmark |
 | `quadrant` | two labelled axes, prior work as dots, ours in red | where the paper sits in the field; place by argument (`at` is a fraction of the plot, `[0,0]` bottom-left) |
 
 ```jsonc
@@ -277,12 +287,17 @@ the number that wins.
      "foot": "the piece ELITE borrows"}
   ],
   "columns": 3,              // optional; up to 4 fit one row, 5-6 wrap to two
-  "style": "header"          // "header" (coloured bar) | "panel" (tint) | "outline"
+  "style": "header"          // "header" (dark bar) | "panel" (tint) | "outline"
 }
+// cards are as tall as their text, at the largest size (<=20pt) that fits;
+// `tag` gets its own small-caps line under the heading
 
 "flow": {
-  "steps": [{"label": "FLAME tracking", "sub": "UV maps"}, "MGPM",
-            {"label": "Enhancer", "sub": "diffusion", "highlight": true}],
+  "steps": [{"label": "FLAME tracking", "sub": "UV maps",
+             "detail": ["photometric fit, per frame"]}, "MGPM",
+            {"label": "Enhancer", "sub": "diffusion", "highlight": true,
+             "detail": ["one step, not from noise"]}],
+  "numbered": true,          // "STEP n" over each box; default on for "box"
   "highlight": 2,            // alternative to a per-step flag; 1-based
   "style": "box",            // or "chevron"
   "direction": "row",        // or "column"
@@ -293,7 +308,7 @@ the number that wins.
   {"value": "20 min", "label": "per-identity fitting", "sub": "CAP4D: 400 min",
    "highlight": true},
   {"value": "0.740", "label": "CSIM", "sub": "CAP4D: 0.706"}
-]}
+], "caption": "Self re-enactment on INSTA"}
 
 "quadrant": {
   "x": ["slow", "fast"], "y": ["low identity", "high identity"],

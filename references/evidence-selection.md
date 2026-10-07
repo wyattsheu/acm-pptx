@@ -22,7 +22,9 @@ N” and preserve the original semantics in the notes. Do not flatten a newly
 authored workflow into PNG, SVG or a Mermaid screenshot.
 
 Use semantic shapes sparingly: rectangle = process, diamond = decision,
-terminator = start/end, cylinder = stored data. Prefer a single neutral fill,
+terminator = start/end, cylinder = stored data. (Graphic exhibits -- cards,
+flow, bignum -- take the section colour in three tones; that is one hue, not
+a palette.) Prefer a single neutral fill,
 thin connectors, aligned baselines and whitespace. Accent only the current
 stage. Rounded pastel cards, gradients, shadows, ornamental icons and a unique
 colour for every node make generated slides look generic and weaken topology.

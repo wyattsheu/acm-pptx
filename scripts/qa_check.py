@@ -42,6 +42,8 @@ TABLE_KEYS = ("matrix", "table")
 TABLE_MAX = 0.35              # WARN: past this the deck is a spreadsheet
 RUN_MAX = 3                   # WARN: this many table-only or text-only slides in a row
 SQUEEZED_W = 7.0              # WARN: a wide figure placed narrower than this
+FILL_MIN = 0.50               # WARN: share of the content height that carries anything
+GAP_MAX = 1.6                 # WARN: an empty band across the slide taller than this (in)
 ROLE_SCHEMA = {
     "paper_method":     {"exhibit": "error"},
     "paper_results":    {"exhibit": "error"},
@@ -422,6 +424,25 @@ def _effective_pt(tf) -> float:
     return 18.0
 
 
+def _text_need(tf, width_in: float, fallback_pt: float) -> float:
+    """Inches the text frame's paragraphs want, each at its own size.
+
+    Judging every paragraph at the frame's largest size called a big-number
+    tile (72pt value, 20pt label, 15pt baseline) three 72pt lines tall and
+    reported an overflow that is not there.
+    """
+    h = 0.0
+    for para in tf.paragraphs:
+        sizes = [int(r.get("sz")) / 100 for r in para._p.iter(A_NS + "rPr") if r.get("sz")]
+        pt = max(sizes) if sizes else fallback_pt
+        text = "".join(r.text for r in para.runs)
+        h += _needed_height(text, width_in, pt, 1)
+        spc = para._p.find(f"{A_NS}pPr/{A_NS}spcBef/{A_NS}spcPts")
+        if spc is not None and spc.get("val"):
+            h += int(spc.get("val")) / 100 / 72
+    return h
+
+
 def _autofits(tf) -> bool:
     """PowerPoint shrinks text in a `normAutofit` box instead of overflowing it."""
     body = tf._txBody.find(A_NS + "bodyPr")
@@ -441,11 +462,13 @@ def _boxes(slide):
         if y > 6.6 and w < 4.5:
             continue                       # the template's page-number placeholder
         tf = shp.text_frame
+        pt = _effective_pt(tf)
         out.append({
             "name": shp.name, "x": x, "y": y, "w": w, "h": h,
             "text": tf.text,
-            "pt": _effective_pt(tf),
+            "pt": pt,
             "paras": len(tf.paragraphs),
+            "need": _text_need(tf, w, pt),
             "autofit": _autofits(tf),
         })
     return out
@@ -458,8 +481,7 @@ def _deck_issues(deck: Path) -> list[tuple[str, int, str, str]]:
     for i, slide in enumerate(prs.slides, start=1):
         boxes = _boxes(slide)
         for b in boxes:
-            need = _needed_height(b["text"], b["w"], b["pt"], b["paras"])
-            b["need"] = need
+            need = b["need"]
             ratio = need / b["h"]
             # An autofit box shrinks its own text, so a mild overrun is cosmetic
             # (smaller type than the lab's 24pt floor) rather than a clipped
@@ -546,6 +568,79 @@ def check_deck(deck: Path, template: Path | None = TEMPLATE) -> tuple[list[str],
             continue
         (errors if level == "error" else warns).append(msg)
     return errors, warns
+
+
+def _occupied(slide, top: float, bottom: float) -> list[tuple[float, float]]:
+    """Vertical extents (inches) of everything in the content region: a
+    filled shape or a picture by its frame, a bare text box by its text."""
+    spans = []
+    for shp in slide.shapes:
+        y, h = Emu(shp.top).inches, Emu(shp.height).inches
+        w = Emu(shp.width).inches
+        if y < top - 0.15 or y > bottom or shp.name == "acm:subtitle":
+            continue                       # title band, subtitle, page number, tags
+        filled = False
+        try:
+            filled = shp.fill.type is not None and shp.fill.type != 5   # 5: background
+        except Exception:
+            pass
+        if shp.has_text_frame and not filled and shp.shape_type != 13:
+            tf = shp.text_frame
+            if not tf.text.strip():
+                continue
+            h = min(h, _text_need(tf, max(0.5, w - 0.2), _effective_pt(tf)) + 0.1)
+        spans.append((max(top, y), min(bottom, y + max(h, 0.05))))
+    return sorted(s_ for s_ in spans if s_[1] > s_[0])
+
+
+def _fill_hint(spec: dict) -> str:
+    if spec.get("flow"):
+        return "give the steps `detail` lines, or move the flow onto a figure slide"
+    if spec.get("matrix") or spec.get("table"):
+        return "a short table leaves the slide half empty; lead with the bignum or pair it with the figure it summarises"
+    if spec.get("equation") and not spec.get("figure"):
+        return "put the figure the equation describes beside it (figure.src takes two)"
+    if any(spec.get(k) for k in EXHIBIT_KEYS):
+        return "enlarge the exhibit or use a layout that gives it the space"
+    return "add an exhibit - cards, a flow, a figure, big numbers"
+
+
+def check_fill(flat: list[dict], deck: Path) -> tuple[list[str], list[str]]:
+    """The emptiness a rule-abiding outline still ships.
+
+    Everything else in this file is about too much: too many words, too many
+    callouts, too many tables. Nothing caught three bullets under a title and
+    a blank lower half, or a strip of boxes floating in the middle of five
+    empty inches -- and those passed every check. The reference decks give
+    their figures 35-72% of the slide. This measures how much of the content
+    region's height carries anything and the tallest empty band across it.
+    """
+    warns = []
+    prs = Presentation(str(deck))
+    for i, (slide, spec) in enumerate(zip(prs.slides, flat), start=1):
+        if spec.get("role") in EXEMPT or spec.get("role") == "cover" or spec.get("table"):
+            continue
+        top = 1.78 if spec.get("subtitle") else 1.72
+        if spec.get("layout") in ("assertion-evidence", "ae"):
+            top = 2.10
+        bottom = 6.80
+        spans = _occupied(slide, top, bottom)
+        covered, edge, gap, gap_at = 0.0, top, 0.0, (top, bottom)
+        for a, b in spans + [(bottom, bottom)]:
+            if a > edge:
+                if a - edge > gap:
+                    gap, gap_at = a - edge, (edge, a)
+                covered += 0.0
+            if b > edge:
+                covered += b - max(a, edge)
+                edge = b
+        share = covered / (bottom - top)
+        if share < FILL_MIN or gap > GAP_MAX:
+            hint = _fill_hint(spec)
+            warns.append(f"slide {i} ({spec.get('role')}): {share:.0%} of the content area "
+                         f"is used; {gap:.1f}in stands empty between y={gap_at[0]:.1f} and "
+                         f"{gap_at[1]:.1f}in - {hint}")
+    return [], warns
 
 
 CUSTOM_MIN_SHAPES = 2        # beyond title, body and page number
@@ -687,6 +782,9 @@ def main() -> None:
         e4, w4 = check_custom(flatten(outline), Path(a.deck))
         errors += e4
         warns += w4
+        e5, w5 = check_fill(flatten(outline), Path(a.deck))
+        errors += e5
+        warns += w5
 
     flat = flatten(outline)
     if a.review:

@@ -17,7 +17,8 @@ ACM Lab (NYCU) PowerPoint 投影片生成工具 / Codex 與 Claude Skill。
 | `v2.3.0` | 支援嵌入影片；QA 改成大部分不用渲染就查得出來；contact sheet 把看圖成本降到約三分之一 |
 | `v2.4.0` | **原生可編輯流程圖**：nodes / edges / groups 自動排版成 PowerPoint shapes 與 connectors；表格依內容分配欄寬；QA 驗證 diagram 不是扁平圖片 |
 | `v2.5.0` | **新增圖形版型** `cards` / `flow` / `bignum` / `quadrant`，表格改成會隨列數放大字；**每頁可指定自己的繪圖函式** `draw`；紅框座標統一（`at` 是 xywh，`xyxy` 是角點，寫錯會被擋）；`"ours": true` 標記自己的內容；QA 會抓「整份都是表格」「寬圖被塞進半欄」「論文報告沒有自己的觀點」 |
-| `v2.6.0` | 目前最新版。**中文支援**（`lang=zh-TW` + 東亞字型、中文字數換算、主張句判斷、圖說不用斜體）；`figure-bottom` 文字區依行數算高、無條列的圖預設滿版；**`figure.py detect / preview`** 自動找圖塊、`--trim`、`--drop-caption`、去 arXiv 浮水印；一頁可放兩張圖；`custom: true`；build 也畫副標；level 1 不再被壓平；`compose.py --sizes`；equation 逐段檢查；指令全改 `python3` |
+| `v2.6.0` | **中文支援**（`lang=zh-TW` + 東亞字型、中文字數換算、主張句判斷、圖說不用斜體）；`figure-bottom` 文字區依行數算高、無條列的圖預設滿版；**`figure.py detect / preview`** 自動找圖塊、`--trim`、`--drop-caption`、去 arXiv 浮水印；一頁可放兩張圖；`custom: true`；build 也畫副標；level 1 不再被壓平；`compose.py --sizes`；equation 逐段檢查；指令全改 `python3` |
+| `v2.7.0` | 目前最新版。**版面不再空**：卡片、大數字依內容算高度並整組置中，條列與圖之間不留洞；**同色三階配色**（深色表頭、底板、斑馬紋）；生成的文字統一 Calibri；flow 加 `detail` 與 STEP 編號；diagram 節點依文字算高、第二行變副標；文字寬度改用實際字型量測；QA 新增**版面填滿率**警告 |
 
 ## 使用方式
 
@@ -44,6 +45,34 @@ git checkout v1.2.0
 ```bash
 git checkout main
 ```
+
+## v2.7.0 有什麼
+
+回饋是「做出來的投影片很單調」。把範例論文報告跑一遍，問題不在單一設定，而是五件事疊在一起：
+
+**1. 圖形撐滿整個區塊，字卻貼在頂端。** `cards` 和 `bignum` 以前高度直接等於整個內容區，
+三行字縮在五吋高的框頂端。現在卡片高度依內容計算，字級在 20pt 以內盡量放大；
+`bignum` 的方塊最高約 2.7 吋、數字放大到 60–72pt；`tag` 改成標題下自己的一行，不再疊到第一個條列。
+
+**2. 文字和圖各自定位，中間留一大段空白。** `compose.py` 新增整組定位：上下排的頁面先把
+exhibit 貼到條列正下方，再把整組放在內容區略高於中央的位置；左右排的頁面兩欄頂端對齊。
+公式改成緊接在條列下方，不再釘在欄底；`stage_figure` 不再限 1.6 吋高、改用整欄寬。
+只有六行以內的純文字頁改用 22pt 加段距。單頁可用 `valign: top` 關掉。
+
+**3. 配色。** 每個段落色衍生三階（`exhibits.tones`）：深色給標題列與表頭（Paper 段的淡紫上白字對比
+從約 2.3:1 提到約 7:1），原色給框線，淡色給底板與表格斑馬紋；「Ours」列改淡紅。仍然只有一個色相加一個紅色焦點。
+
+**4. 字體混用。** 範本 layout 是 Calibri、theme 是 Arial，程式加的文字全掉回 Arial。
+現在 compose 會給所有自己畫的文字補上 Calibri（範本原有的形狀不動）。
+
+**5. QA 只管「太多」不管「太空」。** `qa_check.py` 新增填滿率：內容區高度不到一半有東西、
+或有一條超過 1.6 吋的空白帶就警告，並依 exhibit 種類給建議。SKILL.md 補上正向規則「用證據填滿版面」。
+
+**其他。** 新增 `scripts/measure.py`，用實際字型（Calibri／Carlito／微軟正黑體）量字寬算換行，
+取代固定的 0.55em 估算；`flow` 每步上方有 STEP 編號、下方可加 `detail`；`bignum` 可加 `caption`；
+diagram 節點依文字算高、`\n` 之後變灰色副行、圖說貼在圖下方；QA 的文字高度改逐段計算，
+大數字方塊不再被誤報溢出；修掉 Windows 上 `soffice.py` 因為沒有 `AF_UNIX` 而無法渲染的問題。
+範例 `outline.paper.example.json` 的 Motivation、Conclusion 改用 cards，flow 加上 detail。
 
 ## v2.6.0 有什麼
 

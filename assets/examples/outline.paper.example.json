@@ -36,26 +36,36 @@
       "role": "paper_intro",
       "title": "Motivation",
       "subtitle": "A single video cannot cover the appearance space",
-      "layout": "text-only",
-      "bullets": [
-        {
-          "text": "Unseen profile views, unseen expressions, occluded hair and mouth interior",
-          "level": 0
-        },
-        {
-          "text": "Overfitting to the video alone cannot render what was never observed",
-          "level": 0
-        },
-        {
-          "text": "Every monocular avatar method reduces to one question: where does the prior come from?",
-          "level": 0
-        }
-      ],
       "callout": {
         "label": "Key idea",
-        "text": "That question - not the 3D representation - is what separates all the prior work in this area."
+        "text": "Where the prior comes from - not the 3D representation - is what separates all the prior work in this area."
       },
-      "notes": "這頁是全篇的樞紐。單一段影片涵蓋不到的區域有三類：側面與背面、沒做過的表情、被遮住的頭髮與口腔內部。既然觀察不到，就只能靠 prior 補。所以整個 related work 不該用表示法來分類，而該用 prior 從哪來分類 - 這也是作者自己的分類方式。"
+      "notes": "這頁是全篇的樞紐。單一段影片涵蓋不到的區域有三類：側面與背面、沒做過的表情、被遮住的頭髮與口腔內部。既然觀察不到，就只能靠 prior 補。所以整個 related work 不該用表示法來分類，而該用 prior 從哪來分類 - 這也是作者自己的分類方式。",
+      "cards": {
+        "items": [
+          {
+            "title": "Unseen views",
+            "bullets": [
+              "Profile and back of the head",
+              "Never in front of the camera"
+            ]
+          },
+          {
+            "title": "Unseen expressions",
+            "bullets": [
+              "Only what the subject happened to do",
+              "Driving signals go further"
+            ]
+          },
+          {
+            "title": "Occluded regions",
+            "bullets": [
+              "Hair, mouth interior",
+              "No pixel to fit, only a prior"
+            ]
+          }
+        ]
+      }
     },
     {
       "role": "paper_related",
@@ -160,23 +170,39 @@
         "steps": [
           {
             "label": "FLAME tracking",
-            "sub": "UV texture + geometry"
+            "sub": "UV texture + geometry",
+            "detail": [
+              "photometric fit, per frame"
+            ]
           },
           {
             "label": "MGPM",
-            "sub": "feed-forward 2D Gaussians"
+            "sub": "feed-forward 2D Gaussians",
+            "detail": [
+              "trained offline once",
+              "one forward pass"
+            ]
           },
           {
             "label": "Fine-tune 1",
-            "sub": "3 real frames"
+            "sub": "3 real frames",
+            "detail": [
+              "minutes, per identity"
+            ]
           },
           {
             "label": "Enhancer",
-            "sub": "diffusion, from own render"
+            "sub": "diffusion, from own render",
+            "detail": [
+              "one step, not from noise"
+            ]
           },
           {
             "label": "Fine-tune 2",
-            "sub": "enhanced synthetic"
+            "sub": "enhanced synthetic",
+            "detail": [
+              "same network again"
+            ]
           }
         ],
         "highlight": 2
@@ -266,9 +292,16 @@
             "label": "PSNR",
             "sub": "SplattingAvatar: 24.8"
           }
-        ]
+        ],
+        "caption": "Monocular self re-enactment on INSTA; the full table is on the next slide"
       },
-      "notes": "這頁只放三個數字，表格在下一頁。時間是二十分之一，identity 卻贏過本來該最強的 CAP4D。我的詮釋是監督影像的品質比監督的數量更關鍵。老師可能會問 SSIM，SSIM 略輸 SplattingAvatar，我會直接承認。"
+      "notes": "這頁只放三個數字，表格在下一頁。時間是二十分之一，identity 卻贏過本來該最強的 CAP4D。我的詮釋是監督影像的品質比監督的數量更關鍵。老師可能會問 SSIM，SSIM 略輸 SplattingAvatar，我會直接承認。",
+      "bullets": [
+        {
+          "text": "One twentieth of CAP4D's fitting time, and higher identity similarity",
+          "level": 0
+        }
+      ]
     },
     {
       "role": "paper_results",
@@ -333,26 +366,29 @@
       "role": "paper_conclusion",
       "title": "Conclusion",
       "subtitle": "Combining priors needs no new architecture",
-      "layout": "text-only",
-      "bullets": [
-        {
-          "text": "Feed-forward prior turns test-time optimization into light fine-tuning",
-          "level": 0
-        },
-        {
-          "text": "Grounding generation in your own render buys identity and a single step",
-          "level": 0
-        },
-        {
-          "text": "One network, fine-tuned twice on two kinds of supervision",
-          "level": 0
-        },
-        {
-          "text": "Limitation (presenter): no ablation isolates enhancer from init",
-          "level": 0
-        }
-      ],
-      "notes": "三個 takeaway 要留在螢幕上給 Q&A 用。作者自己承認的限制是依賴 FLAME tracking 的品質。我自己看到的問題是 ablation 沒有把 enhancer 跟更好的初始化分開，所以 20 分鐘這個數字有多少來自哪一邊其實不確定。可能被問到的問題：MGPM 沒看過的族群會怎樣、tracking 失敗時整條 pipeline 會不會崩。"
+      "notes": "三個 takeaway 要留在螢幕上給 Q&A 用。作者自己承認的限制是依賴 FLAME tracking 的品質。我自己看到的問題是 ablation 沒有把 enhancer 跟更好的初始化分開，所以 20 分鐘這個數字有多少來自哪一邊其實不確定。可能被問到的問題：MGPM 沒看過的族群會怎樣、tracking 失敗時整條 pipeline 會不會崩。",
+      "cards": {
+        "columns": 2,
+        "items": [
+          {
+            "title": "Prior, then light fine-tuning",
+            "text": "A feed-forward prior turns test-time optimization into minutes of fine-tuning"
+          },
+          {
+            "title": "Ground generation in your own render",
+            "text": "Enhancing its own render buys identity and a single diffusion step"
+          },
+          {
+            "title": "No new architecture",
+            "text": "One network, fine-tuned twice on two kinds of supervision"
+          },
+          {
+            "title": "Limitation (presenter)",
+            "highlight": true,
+            "text": "No ablation isolates the enhancer from the better initialization"
+          }
+        ]
+      }
     },
     {
       "role": "paper_conclusion",

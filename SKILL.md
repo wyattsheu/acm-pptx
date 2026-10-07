@@ -3,7 +3,7 @@ name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, 論文報告, paper study, or any .pptx/.potx in ACM Lab format, and whenever such a deck is created, edited or read. Also use it when the user hands you a paper PDF or a MinerU directory and asks for slides, when they hand you an outline, when they want a demo video or supplementary clip inside a deck, or when they mention Prof. Huang Ching-Chun's lab meeting. Never build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
 license: Lab-internal use
 metadata:
-  version: "2.6.0"
+  version: "2.7.0"
   template_version: "acm_template.pptx (22 slides, 13.333in x 7.5in)"
 ---
 
@@ -165,6 +165,21 @@ counts follow the material and speaking time, not a fixed quota.
   only for storage. Use one neutral fill, thin grey connectors, square alignment
   and whitespace. Reserve the lab red for the node or row currently being
   argued; do not make every node a rounded pastel card.
+- **Fill the slide with evidence, not with air.** Restraint is about emphasis,
+  not about leaving half the slide blank. The reference decks give their
+  figures 35-72% of the slide; a slide whose lower half is empty reads as
+  unfinished. Every intro, method, results and conclusion slide carries an
+  exhibit unless it is the one slide where the talk turns. Three parallel
+  points are `cards`, not three bullets; a `flow` gets `detail` lines under
+  its steps; a `bignum` gets the one-line lead-in it answers; a conclusion is
+  a 2×2 of `cards`. `compose.py` sizes cards and number tiles to their
+  content, closes the gap between text and exhibit and centres the group, so
+  a short exhibit no longer floats in a five-inch frame — and `qa_check.py`
+  warns when less than half of a content slide's height carries anything.
+- **Colour comes from the section, in three steps.** Every exhibit takes the
+  slide's section colour as a dark tone (header bars, table heads — white
+  text stays legible on it), the tab colour (frames, rules) and a pale wash
+  (panels, banded rows). Red stays the one focus. Do not add hues of your own.
 - **Find the crop box before cropping.** `figure.py preview --pdf p.pdf
   --page 3 -o page3.png` draws a 0.1 grid in page fractions; `figure.py
   detect` prints candidate `--box` values for the figure blocks it finds.
@@ -300,8 +315,9 @@ generic title with nothing under it, an annotation box past the picture edge
 the `.pptx` as named native PowerPoint objects. It warns on thin notes,
 piled-up callouts, a high text-only ratio, text PowerPoint will auto-shrink, a
 table-heavy deck or three tables or three text-only slides in a row, a wide
-figure squeezed into a half column, and a paper talk with no `ours` slide.
-Findings the lab
+figure squeezed into a half column, a paper talk with no `ours` slide, and a
+content slide whose content covers under half the region's height or leaves
+an empty band over 1.6in across it. Findings the lab
 template already trips on its own are baselined out, so a clean deck really
 does reach `0 error(s)`. `--review` adds the claim sequence, a slide inventory
 and a rubric for content, design and coherence — run it once before handing the
