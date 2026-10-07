@@ -16,17 +16,24 @@ images MinerU wrote — those are downsampled bitmaps. Take MinerU's **bbox**
 and re-render the original PDF at 300 dpi:
 
 ```bash
-python scripts/figure.py list --mineru out/paper/auto
-python scripts/figure.py crop --pdf paper.pdf --mineru out/paper/auto \
+python3 scripts/figure.py list --mineru out/paper/auto
+python3 scripts/figure.py crop --pdf paper.pdf --mineru out/paper/auto \
     --index 3 -o figs/fig3.png
 ```
 
-Without MinerU, crop by page fraction and expect to iterate once or twice:
+Without MinerU, look at the page once, then crop:
 
 ```bash
-python scripts/figure.py crop --pdf paper.pdf --page 3 \
-    --box 0.06,0.36,0.97,0.86 -o figs/fig1.png
+python3 scripts/figure.py detect  --pdf paper.pdf --page 3 -o page3.png   # candidate boxes + grid
+python3 scripts/figure.py crop --pdf paper.pdf --page 3 \
+    --box 0.06,0.36,0.97,0.86 -o figs/fig1.png --trim --drop-caption
 ```
+
+`detect` prints a `--box` per figure-like block and writes the page with a
+0.1 grid and the boxes numbered; `preview` writes the grid alone. The first
+decks built with this skill spent 11-19 crops per paper guessing boxes from
+whole-page fractions. Read the box off the image instead. `--box` is corners,
+`x0,y0,x1,y1`, the same form an annotation's `xyxy` takes.
 
 MinerU earns its keep on one specific thing: composite figures. A CVPR teaser
 is a dozen sub-images laid out as one figure; MinerU's layout detection keeps

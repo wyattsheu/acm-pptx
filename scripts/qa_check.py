@@ -36,7 +36,8 @@ EXEMPT = {"cover", "summary", "paper_list", "project_summary", "research_summary
 # What each functional slide type must carry. PPTAgent's Stage I calls this a
 # content schema; here it is the machine-checkable half of slide-patterns.md.
 EXHIBIT_KEYS = ("figure", "video", "diagram", "matrix", "equation", "stage",
-                "table", "cards", "flow", "bignum", "quadrant", "draw")
+                "table", "cards", "flow", "bignum", "quadrant", "draw", "custom")
+CAPTION_MAX = 60              # WARN: characters (CJK counts double) before a caption shrinks
 TABLE_KEYS = ("matrix", "table")
 TABLE_MAX = 0.35              # WARN: past this the deck is a spreadsheet
 RUN_MAX = 3                   # WARN: this many table-only or text-only slides in a row
@@ -56,11 +57,23 @@ NON_CLAIM = re.compile(
     r"experiments?|ablation|overview|background|motivation)$", re.I)
 
 
+CJK_PER_WORD = 1.8          # one English word of slide text is ~1.8 中文字
+
+
+def cjk_count(text: str) -> int:
+    return len(re.findall(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]", text or ""))
+
+
 def words(text: str) -> int:
-    """CJK counts per character; latin per whitespace token."""
-    cjk = len(re.findall(r"[\u4e00-\u9fff\u3040-\u30ff]", text))
+    """Word-equivalents: latin per token, CJK at 1.8 characters per word.
+
+    Counting every 中文字 as a word made the 40-word cap two lines of Chinese
+    (feedback A2); 1.8 puts a Chinese body at the same visual density as an
+    English one, about 70 characters.
+    """
+    cjk = len(re.findall(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]", text))
     latin = len(re.findall(r"[A-Za-z0-9][A-Za-z0-9\-/%.+]*", text))
-    return cjk + latin
+    return latin + int(round(cjk / CJK_PER_WORD))
 
 
 def flatten(outline: dict) -> list[dict]:
@@ -122,7 +135,7 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
             errors.append(f"{tag}: generic title {title!r} says nothing and there "
                           f"is no `subtitle` to carry the point - name the method, "
                           f"or state the finding in a subtitle")
-        elif claim and len(claim.split()) < CLAIM_MIN_WORDS:
+        elif claim and words(claim) < CLAIM_MIN_WORDS:
             warns.append(f"{tag}: claim {claim!r} reads as a label, not a statement")
 
         if spec.get("callout"):
@@ -139,6 +152,12 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
         if isinstance(fig, dict):
             if not fig.get("caption"):
                 warns.append(f"{tag}: figure has no caption")
+            elif len(fig["caption"]) + cjk_count(fig["caption"]) > CAPTION_MAX:
+                warns.append(f"{tag}: caption is {len(fig['caption'])} characters - past "
+                             f"~{CAPTION_MAX} it renders small; move the detail into "
+                             f"bullets or notes (feedback E4)")
+            if isinstance(fig.get("src"), list) and len(fig["src"]) != 2:
+                errors.append(f"{tag}: figure.src as a list takes exactly two paths")
             if not (fig.get("source") or "Fig" in (fig.get("caption") or "")):
                 errors.append(f"{tag}: borrowed figure with no source "
                               f"- lab-rules.md requires citing borrowed visuals")
@@ -210,7 +229,8 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
 
         # 3d. a wide figure in a half column is unreadable: compute where it
         # lands and say so, instead of leaving it for the render
-        if isinstance(fig, dict) and fig.get("src") and Path(fig["src"]).exists():
+        single = isinstance(fig, dict) and isinstance(fig.get("src"), str)
+        if single and Path(fig["src"]).exists():
             placed = _placed_figure(spec, fig["src"])
             if placed is not None:
                 pw, ph, aspect = placed
@@ -528,6 +548,31 @@ def check_deck(deck: Path, template: Path | None = TEMPLATE) -> tuple[list[str],
     return errors, warns
 
 
+CUSTOM_MIN_SHAPES = 2        # beyond title, body and page number
+
+
+def check_custom(flat: list[dict], deck: Path) -> tuple[list[str], list[str]]:
+    """`"custom": true` promises an exhibit drawn by the user's own script.
+    Count what is actually on the slide, so the promise is checked against
+    the deck rather than taken on faith (feedback F8)."""
+    errors, warns = [], []
+    prs = Presentation(str(deck))
+    for i, (slide, spec) in enumerate(zip(prs.slides, flat), start=1):
+        if not spec.get("custom"):
+            continue
+        extra = 0
+        for shp in slide.shapes:
+            if shp.has_text_frame and (shp.is_placeholder or shp.name == "acm:subtitle"):
+                continue
+            if shp.has_text_frame and shp.text_frame.text.strip() in ("", "\u2039#\u203a"):
+                continue
+            extra += 1
+        if extra < CUSTOM_MIN_SHAPES:
+            errors.append(f"slide {i}: marked `custom` but carries {extra} drawn shape(s) "
+                          f"- run your drawing script before QA, or drop the flag")
+    return errors, warns
+
+
 def check_diagram_editability(flat: list[dict], deck: Path) -> tuple[list[str], list[str]]:
     """Prove diagram semantics landed as named native objects, not a bitmap."""
     errors, warns = [], []
@@ -639,6 +684,9 @@ def main() -> None:
         e3, w3 = check_diagram_editability(flatten(outline), Path(a.deck))
         errors += e3
         warns += w3
+        e4, w4 = check_custom(flatten(outline), Path(a.deck))
+        errors += e4
+        warns += w4
 
     flat = flatten(outline)
     if a.review:

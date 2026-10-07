@@ -10,7 +10,8 @@ lets the plain skill hand work off to the executable one.
     "title": "Progress Report",
     "date": "2026.08.23",
     "advisor": "Prof. Huang Ching-Chun",
-    "student": "Your Name"
+    "student": "Your Name",
+    "cjk_font": "Microsoft JhengHei"   // optional; the East-Asian face written on every 中文 run
   },
 
   "summary": {                    // presence of summary adds slide 2
@@ -110,6 +111,11 @@ lets the plain skill hand work off to the executable one.
   `slides` alone is a valid outline.
 - Roles may repeat.
 - Unused table rows are blanked, never left as `XXX`.
+- Every run that carries 中文 is written with `lang="zh-TW"` and an
+  `<a:ea>` typeface by both builders, so a deck renders the same in
+  LibreOffice and PowerPoint. The body word cap counts 1.8 中文字 as one word.
+- `"custom": true` marks a slide whose exhibit you draw with your own script
+  after the build; `"ours": true` marks the presenter's own content.
 
 ## Round-tripping
 
@@ -117,7 +123,7 @@ lets the plain skill hand work off to the executable one.
 environment that can execute code and run:
 
 ```bash
-python scripts/build_from_outline.py outline.json -o report.pptx
+python3 scripts/build_from_outline.py outline.json -o report.pptx
 ```
 
 Nothing else needs to transfer — the template lives in the package, not in

@@ -41,6 +41,28 @@ Debian:  sudo apt install poppler-utils ffmpeg libreoffice
 `markitdown` is only needed to read existing decks; `ffmpeg`/`ffprobe` only to
 embed video. MinerU is optional and never required.
 
+## What changed in v2.6.0
+
+**Chinese text.** Both builders write `lang="zh-TW"` and an East-Asian
+typeface on every run that carries CJK (`scripts/cjk.py`; `meta.cjk_font`
+overrides the face). The body cap and the claim-length check count 1.8
+Chinese characters as one word; CJK captions are upright and at least 12pt.
+
+**Layout.** The `figure-bottom` text strip is sized to its lines; a figure
+with no bullets defaults to `figure-full`; `compose.py --sizes` prints the
+exhibit box per layout; a slide with one placeholder tier gets a synthesised
+indented tier for `level: 1`; `build_from_outline.py` draws the subtitle
+itself (named `acm:subtitle`, reused by compose), and the agenda-page
+duplicate is gone.
+
+**Figures.** `figure.py preview` and `figure.py detect` (grid, candidate
+boxes, arXiv stamp excluded), `crop --trim` and `--drop-caption`, two
+sources in one `figure` (`"src": [a, b]`), a caption-length warning.
+
+**Also.** Equation parts are parsed one by one with the failing part named;
+`"custom": true` makes QA count the shapes actually drawn; every documented
+command is `python3`; `render_qa.py --pages` is documented.
+
 ## What changed in v2.5.0
 
 **Graphic exhibits.** `cards`, `flow`, `bignum` and `quadrant` fields on a

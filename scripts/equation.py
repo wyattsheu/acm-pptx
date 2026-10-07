@@ -32,6 +32,7 @@ def render(parts: list[tuple[str, str]], out: Path, *, dpi: int = 220,
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    check_parts([t for t, _ in parts])
     width = max(3.0, 0.9 * sum(len(t) for t, _ in parts) ** 0.6)
     fig = plt.figure(figsize=(width, 1.35))
     fig.patch.set_alpha(0)
@@ -49,6 +50,29 @@ def render(parts: list[tuple[str, str]], out: Path, *, dpi: int = 220,
                 pad_inches=0.04)
     plt.close(fig)
     return out
+
+
+def check_parts(parts: list[str]) -> None:
+    """Parse every part alone first, so a failure names the part, not a
+    matplotlib traceback (feedback F6). Each part is its own mathtext string:
+    `\\left(` in one part and `\\right)` in another cannot pair across
+    the split; put both in the same part or use plain parentheses."""
+    from matplotlib.mathtext import MathTextParser
+    parser = MathTextParser("path")
+    bad = []
+    for i, latex in enumerate(parts, start=1):
+        try:
+            parser.parse(f"${latex}$")
+        except Exception as e:                        # ValueError from the parser
+            lines = [ln for ln in str(e).splitlines() if ln.strip()]
+            reason = lines[-1].strip() if lines else type(e).__name__
+            hint = ""
+            if "\\left" in latex or "\\right" in latex:
+                hint = " - \\left/\\right must open and close inside one part"
+            bad.append(f"  part {i}: {latex!r}\n    {reason}{hint}")
+    if bad:
+        raise SystemExit("equation: these parts do not render on their own "
+                         "(matplotlib mathtext, a LaTeX subset):\n" + "\n".join(bad))
 
 
 def parse_part(raw: str) -> tuple[str, str]:

@@ -16,7 +16,8 @@ ACM Lab (NYCU) PowerPoint 投影片生成工具 / Codex 與 Claude Skill。
 | `v2.2.0` | 紅框改為稀用、標題承載論點；QA 只渲染需要看的頁面；輸出只留一份 .pptx |
 | `v2.3.0` | 支援嵌入影片；QA 改成大部分不用渲染就查得出來；contact sheet 把看圖成本降到約三分之一 |
 | `v2.4.0` | **原生可編輯流程圖**：nodes / edges / groups 自動排版成 PowerPoint shapes 與 connectors；表格依內容分配欄寬；QA 驗證 diagram 不是扁平圖片 |
-| `v2.5.0` | 目前最新版。**新增圖形版型** `cards` / `flow` / `bignum` / `quadrant`，表格改成會隨列數放大字；**每頁可指定自己的繪圖函式** `draw`；紅框座標統一（`at` 是 xywh，`xyxy` 是角點，寫錯會被擋）；`"ours": true` 標記自己的內容；QA 會抓「整份都是表格」「寬圖被塞進半欄」「論文報告沒有自己的觀點」 |
+| `v2.5.0` | **新增圖形版型** `cards` / `flow` / `bignum` / `quadrant`，表格改成會隨列數放大字；**每頁可指定自己的繪圖函式** `draw`；紅框座標統一（`at` 是 xywh，`xyxy` 是角點，寫錯會被擋）；`"ours": true` 標記自己的內容；QA 會抓「整份都是表格」「寬圖被塞進半欄」「論文報告沒有自己的觀點」 |
+| `v2.6.0` | 目前最新版。**中文支援**（`lang=zh-TW` + 東亞字型、中文字數換算、主張句判斷、圖說不用斜體）；`figure-bottom` 文字區依行數算高、無條列的圖預設滿版；**`figure.py detect / preview`** 自動找圖塊、`--trim`、`--drop-caption`、去 arXiv 浮水印；一頁可放兩張圖；`custom: true`；build 也畫副標；level 1 不再被壓平；`compose.py --sizes`；equation 逐段檢查；指令全改 `python3` |
 
 ## 使用方式
 
@@ -43,6 +44,35 @@ git checkout v1.2.0
 ```bash
 git checkout main
 ```
+
+## v2.6.0 有什麼
+
+這版把回饋檔 A–E 段和 F6–F12 收掉。
+
+**中文（A1–A4）。** 兩個 builder 都會把含中文的 run 寫上 `lang="zh-TW"` 和
+`<a:ea typeface="Microsoft JhengHei">`（`meta.cjk_font` 可改），LibreOffice 預覽
+不再疊字、PowerPoint 不再自己猜字型。字數上限改成 1.8 個中文字算一個英文字
+（約 70 字），主張句長度也用同一套算，不會再把每句中文判成標籤。中文圖說不用
+斜體、至少 12pt。
+
+**版面（B1/E3/F5、B3、B4、B5/F11、F7）。** `figure-bottom` 的文字區高度依實際
+行數算（一行約 0.57 吋，不再固定 1.85 吋），沒有條列的圖預設改用 `figure-full`。
+`compose.py --sizes` 印出每個版型留給 exhibit 的尺寸，自製圖照那個尺寸畫，字就不會縮。
+議程頁的副標不再出現兩次；只有一層樣式的頁面給 `level: 1` 會自動合成縮排項目符號
+並在 build 時提示；`build_from_outline.py` 自己就會畫紅色副標，只用骨架也不會少。
+
+**裁圖（C1/E1/F12、C2、C3、E2、E4）。** `figure.py detect --pdf X --page N -o page.png`
+列出該頁找到的圖塊（直接給 `--box`），並輸出帶 0.1 格線和編號紅框的整頁圖；
+`preview` 只畫格線。`crop --trim` 去白邊、`--drop-caption` 去掉底下的圖說，左側
+arXiv 浮水印預設排除。`figure.src` 可給兩張圖（公式＋對應的圖）自動上下排。
+圖說超過約 60 字會警告。
+
+**其他（F6、F8、F10、D1）。** equation 的 `parts` 會逐段先試排，錯了指出第幾段，
+`\left(`／`\right)` 跨段會直接說明；`"custom": true` 讓 QA 改數投影片上實際的
+圖形數量；文件指令全部改成 `python3`；SKILL.md 補上 `render_qa.py --pages 18-22`。
+
+沒做的：D2（範本自己的 `Todolist & Suggestion from Prof.` 標籤溢出）。那是實驗室
+範本本身的文字框，動它等於改範本；QA 已經以範本為基準扣掉，先留著。
 
 ## v2.5.0 有什麼
 
@@ -112,8 +142,8 @@ python-pptx 硬塞；而 python-pptx 的 `add_movie()` 預設把媒體標成
 現在：
 
 ```bash
-python scripts/video.py probe raw.mov                        # PowerPoint 放得出來嗎
-python scripts/video.py prep raw.mov -o figs/demo.mp4 --clip 0:03-0:18
+python3 scripts/video.py probe raw.mov                        # PowerPoint 放得出來嗎
+python3 scripts/video.py prep raw.mov -o figs/demo.mp4 --clip 0:03-0:18
 ```
 
 然後在 outline 裡寫 `"video": {"src": "figs/demo.mp4", "autoplay": true, "loop": true}`。

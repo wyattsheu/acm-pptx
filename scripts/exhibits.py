@@ -44,6 +44,11 @@ PANEL = "F4F6F8"
 WHITE = "FFFFFF"
 
 
+def _has_cjk(text: str) -> bool:
+    import cjk
+    return cjk.has_cjk(text)
+
+
 def rgb(hexstr: str) -> RGBColor:
     return RGBColor.from_string(hexstr.lstrip("#").upper())
 
@@ -120,7 +125,7 @@ def write(shape_or_slide, text_lines, *, box=None, size=14, color=INK, bold=Fals
         r.text = d.get("text", "")
         r.font.size = Pt(d.get("size", size))
         r.font.bold = d.get("bold", bold)
-        r.font.italic = d.get("italic", italic)
+        r.font.italic = d.get("italic", italic) and not _has_cjk(r.text)
         r.font.color.rgb = rgb(d.get("color", color))
     return shp
 

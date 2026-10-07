@@ -31,6 +31,7 @@ from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
+import cjk
 import exhibits
 
 # ---------------------------------------------------------------- palette
@@ -86,10 +87,34 @@ def default_layout(spec: dict) -> str:
     if any(spec.get(k) for k in WIDE_GRAPHICS):
         return "figure-bottom" if has_bullets else "figure-full"
     if spec.get("figure"):
-        return "figure-bottom"
+        return "figure-bottom" if has_bullets else "figure-full"
     if spec.get("stage"):
         return "figure-right"   # the pipeline strip lives where a figure would
     return "text-only"
+
+
+BODY_PT = 20                 # the template's body size
+LINE_H = BODY_PT * 1.25 / 72  # inches per line
+
+
+def body_lines(spec: dict, width: float) -> int:
+    """How many lines the bullets take at the template's 20pt in `width` inches."""
+    per_line = max(1.0, width * 72 / (BODY_PT * 0.55))
+    n = 0
+    for b in spec.get("bullets") or []:
+        text = b["text"] if isinstance(b, dict) else str(b)
+        level = int(b.get("level", 0)) if isinstance(b, dict) else 0
+        ems = sum(1.0 if cjk.has_cjk(ch) else 0.55 for ch in text) / 0.55
+        n += max(1, -(-int(ems) // int(per_line - 4 * level)))
+    return n
+
+
+def body_strip_height(spec: dict, width: float) -> float:
+    """The strip a `figure-bottom` slide gives its bullets: as tall as the
+    lines need and no taller (feedback B1/E3), so a one-line lead-in leaves
+    the whole width *and* most of the height to the figure."""
+    n = body_lines(spec, width)
+    return 0.0 if n == 0 else 0.22 + LINE_H * n
 
 
 def regions(spec: dict) -> dict:
@@ -128,7 +153,7 @@ def regions(spec: dict) -> dict:
         return {"layout": layout, "span": span, "body": None,
                 "fig": (BLEED_L, top, BLEED_R - BLEED_L, h)}
     if layout == "figure-bottom":
-        th = min(1.85, h * 0.38)
+        th = min(1.85, h * 0.38, body_strip_height(spec, w))
         return {"layout": layout, "span": span,
                 "body": (LEFT, top, w, th),
                 "fig": (BLEED_L, top + th + 0.12, BLEED_R - BLEED_L, h - th - 0.12)}
@@ -208,6 +233,15 @@ def _set_shape_name(shape, name: str) -> None:
         nodes[0].set("name", name)
 
 
+def caption(slide, box, text, size=11, *, align=PP_ALIGN.CENTER, color=None):
+    """Grey italic for Latin captions; 中文 has no true italic, so it is set
+    upright and never below 12pt (feedback A4)."""
+    if cjk.has_cjk(text):
+        return textbox(slide, box, text, max(12, size), color=color or GREY,
+                       italic=False, align=align)
+    return textbox(slide, box, text, size, color=color or GREY, italic=True, align=align)
+
+
 def fit(img_box, iw, ih, *, vcenter=True):
     """Aspect-preserving fit. Side layouts centre; stacked layouts hug the top."""
     x, y, w, h = img_box
@@ -219,12 +253,28 @@ def fit(img_box, iw, ih, *, vcenter=True):
 
 # ---------------------------------------------------------------- pieces
 
+SUBTITLE_NAME = "acm:subtitle"
+
+
+def subtitle_box(slide, text: str):
+    """The red claim line. Named, so a later pass finds it instead of adding
+    another (feedback B4/F7: build_from_outline draws it too)."""
+    for shp in slide.shapes:
+        if shp.name == SUBTITLE_NAME:
+            shp.text_frame.paragraphs[0].runs[0].text = text
+            place(shp, SUBTITLE)
+            return shp
+    tb = textbox(slide, SUBTITLE, text, 18, color=RED)
+    tb.name = SUBTITLE_NAME
+    return tb
+
+
 def add_subtitle(slide, spec) -> None:
     title = find_title(slide)
     if title is not None:
         place(title, TITLE)
         title.text_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
-    textbox(slide, SUBTITLE, spec["subtitle"], 18, color=RED)
+    subtitle_box(slide, spec["subtitle"])
 
 
 def add_assertion(slide, spec) -> None:
@@ -233,6 +283,9 @@ def add_assertion(slide, spec) -> None:
     if title is not None:
         place(title, TITLE)
         title.text_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+    for shp in list(slide.shapes):               # build's small red line, if any
+        if shp.name == SUBTITLE_NAME:
+            shp._element.getparent().remove(shp._element)
     textbox(slide, ASSERT, spec["subtitle"], 24,
             color=RGBColor(0x1A, 0x1A, 0x1A), bold=True, anchor=MSO_ANCHOR.TOP)
 
@@ -241,21 +294,47 @@ def add_figure(slide, spec, box, *, vcenter=True) -> tuple[float, float, float, 
     from PIL import Image
 
     fig = spec["figure"]
-    src = Path(fig["src"] if isinstance(fig, dict) else fig)
-    if not src.exists():
-        raise SystemExit(f"figure not found: {src}")
-    fig = fig if isinstance(fig, dict) else {"src": str(src)}
+    fig = fig if isinstance(fig, dict) else {"src": fig}
+    srcs = fig["src"] if isinstance(fig["src"], list) else [fig["src"]]
+    if not 1 <= len(srcs) <= 2:
+        raise SystemExit("figure.src takes one path, or two to stack (feedback E2)")
+    for s_ in srcs:
+        if not Path(s_).exists():
+            raise SystemExit(f"figure not found: {s_}")
 
     x, y, w, h = box
     if fig.get("caption"):
         h -= CAPTION_H
+    if len(srcs) == 2:
+        # two parts of one exhibit -- the paper's equation and the figure it
+        # describes -- stacked ("column", default) or side by side ("row"),
+        # each fitted to its half
+        gap = 0.14
+        sizes = [Image.open(s_).size for s_ in srcs]
+        if fig.get("stack") == "row":
+            halves = [(x, y, (w - gap) / 2, h), (x + (w + gap) / 2, y, (w - gap) / 2, h)]
+        else:
+            need = [ih_ / iw_ * w for iw_, ih_ in sizes]   # height each wants at full width
+            frac = need[0] / sum(need)
+            h0 = (h - gap) * frac
+            halves = [(x, y, w, h0), (x, y + h0 + gap, w, h - gap - h0)]
+        rects = [fit(hb, iw_, ih_, vcenter=True) for hb, (iw_, ih_) in zip(halves, sizes)]
+        for s_, r in zip(srcs, rects):
+            slide.shapes.add_picture(s_, Inches(r[0]), Inches(r[1]), Inches(r[2]), Inches(r[3]))
+        left, top = min(r[0] for r in rects), min(r[1] for r in rects)
+        right = max(r[0] + r[2] for r in rects)
+        bottom = max(r[1] + r[3] for r in rects)
+        rect = (left, top, right - left, bottom - top)
+        if fig.get("caption"):
+            caption(slide, (x, rect[1] + rect[3] + 0.06, w, CAPTION_H), fig["caption"])
+        return rect
+    src = srcs[0]
     iw, ih = Image.open(src).size
     rect = fit((x, y, w, h), iw, ih, vcenter=vcenter)
     slide.shapes.add_picture(str(src), Inches(rect[0]), Inches(rect[1]),
                              Inches(rect[2]), Inches(rect[3]))
     if fig.get("caption"):
-        textbox(slide, (x, rect[1] + rect[3] + 0.06, w, CAPTION_H),
-                fig["caption"], 11, color=GREY, italic=True, align=PP_ALIGN.CENTER)
+        caption(slide, (x, rect[1] + rect[3] + 0.06, w, CAPTION_H), fig["caption"])
     return rect
 
 
@@ -368,8 +447,7 @@ def add_video(slide, spec, box, *, vcenter=True) -> tuple[float, float, float, f
         _play_badge(slide, rect,
                     f"\u25b6 {secs // 60}:{secs % 60:02d}" if secs else "\u25b6")
     if v.get("caption"):
-        textbox(slide, (x, rect[1] + rect[3] + 0.06, w, CAPTION_H),
-                v["caption"], 11, color=GREY, italic=True, align=PP_ALIGN.CENTER)
+        caption(slide, (x, rect[1] + rect[3] + 0.06, w, CAPTION_H), v["caption"])
     return rect
 
 
@@ -555,8 +633,7 @@ def add_matrix(slide, spec, box) -> None:
                 _style_cell(cell, size, bold=(c == 0),
                             align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
     if m.get("caption"):
-        textbox(slide, (x, top + height + 0.06, w, 0.28), m["caption"], 11,
-                color=GREY, italic=True, align=PP_ALIGN.CENTER)
+        caption(slide, (x, top + height + 0.06, w, 0.28), m["caption"])
 
 
 # ---------------------------------------------------------------- native diagrams
@@ -724,8 +801,8 @@ def add_diagram(slide, spec, box) -> None:
     diagram = spec["diagram"]
     _validate_diagram(diagram)
     x, y, w, h = box
-    caption = diagram.get("caption")
-    if caption:
+    cap_text = diagram.get("caption")
+    if cap_text:
         h -= CAPTION_H
     canvas = (x, y, w, h)
     boxes = _diagram_boxes(diagram, canvas)
@@ -838,9 +915,8 @@ def add_diagram(slide, spec, box) -> None:
             connector.begin_connect(node_shapes[edge["from"]], begin_idx)
             connector.end_connect(node_shapes[edge["to"]], end_idx)
 
-    if caption:
-        textbox(slide, (x, y + h + 0.05, w, CAPTION_H), str(caption), 11,
-                color=GREY, italic=True, align=PP_ALIGN.CENTER)
+    if cap_text:
+        caption(slide, (x, y + h + 0.05, w, CAPTION_H), str(cap_text))
 
 
 def _style_cell(cell, size, *, bold=False, color=None, align=PP_ALIGN.LEFT):
@@ -907,8 +983,7 @@ def add_equation(slide, spec, box, outline_dir: Path, tag: str) -> None:
 
     cy = rect[1] + rect[3] + 0.05
     if eq.get("label"):
-        textbox(slide, (x, cy, w, 0.24), eq["label"], 11,
-                color=GREY, italic=True, align=PP_ALIGN.CENTER)
+        caption(slide, (x, cy, w, 0.24), eq["label"])
         cy += 0.26
     for colour, text in captions.items():
         textbox(slide, (x, cy, w, 0.26), text, 12,
@@ -952,9 +1027,7 @@ def add_stage(slide, spec, stage_figure, box) -> None:
     add_annotations(slide, {"annotations": [
         {"type": "box", "at": at, "color": stage_figure.get("color", "C00000")}]}, rect)
     if stage_figure.get("caption"):
-        textbox(slide, (x, rect[1] + rect[3] + 0.04, w, 0.24),
-                stage_figure["caption"], 10, color=GREY, italic=True,
-                align=PP_ALIGN.CENTER)
+        caption(slide, (x, rect[1] + rect[3] + 0.04, w, 0.24), stage_figure["caption"], 10)
 
 
 OURS_BOX = (0.92, 6.90, 1.9, 0.26)   # bottom-left, clear of the page number
@@ -1021,6 +1094,8 @@ def flatten(outline: dict) -> list[dict]:
 VISUAL_KEYS = ("subtitle", "figure", "video", "diagram", "annotations",
                "callout", "matrix", "equation", "stage", "divider",
                "ours") + exhibits.GRAPHIC_KEYS
+# `"custom": true` says the user draws this slide's exhibit with their own
+# script after the build; compose leaves the region alone (feedback F8)
 
 
 STAMP = "acm-composed"          # so a second pass cannot silently double every shape
@@ -1143,21 +1218,52 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
             add_ours(slide, spec)
 
     out = out or deck
+    cjk.tag_deck(prs, cjk.font_from_outline(outline))
     prs.core_properties.content_status = STAMP
     prs.save(str(out))
     print(f"composed {touched}/{len(flat)} slides -> {out}")
     return out
 
 
+def print_sizes() -> None:
+    """Draw a figure to these sizes and its labels stay at the size you set.
+
+    A plot made 6in wide for a 5.75in slot is placed at scale 0.96, so 12pt
+    axis labels stay 12pt. Made 12in wide for the same slot, they land at
+    6pt (feedback B3).
+    """
+    print(f"{'layout':20} {'bullets':8} {'exhibit box (w x h in)':24} with subtitle")
+    for layout in ("figure-right", "figure-left", "figure-bottom", "figure-full",
+                   "assertion-evidence"):
+        for bullets in (False, True):
+            if layout in ("figure-full", "assertion-evidence") and bullets:
+                continue
+            spec = {"layout": layout, "figure": "x.png"}
+            if bullets:
+                spec["bullets"] = ["one line", "two lines"]
+            a = regions(spec)["fig"]
+            b = regions(dict(spec, subtitle="s"))["fig"]
+            print(f"{layout:20} {('2 lines' if bullets else '-'):8} "
+                  f"{a[2]:.2f} x {a[3] - CAPTION_H:.2f}{'':13} {b[2]:.2f} x {b[3] - CAPTION_H:.2f}")
+    print("(heights already leave room for a caption; a callout takes 0.96in more)")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("outline")
-    ap.add_argument("deck")
+    ap.add_argument("outline", nargs="?")
+    ap.add_argument("deck", nargs="?")
     ap.add_argument("-o", "--output", help="default: edit the deck in place")
     ap.add_argument("--force", action="store_true",
                     help="compose a deck that was already composed once")
+    ap.add_argument("--sizes", action="store_true",
+                    help="print the exhibit box each layout gives, in inches, and exit")
     a = ap.parse_args()
+    if a.sizes:
+        print_sizes()
+        return
+    if not a.outline or not a.deck:
+        ap.error("outline and deck are required (or --sizes)")
     compose(Path(a.outline), Path(a.deck),
             Path(a.output) if a.output else None, force=a.force)
 

@@ -3,7 +3,7 @@ name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, 論文報告, paper study, or any .pptx/.potx in ACM Lab format, and whenever such a deck is created, edited or read. Also use it when the user hands you a paper PDF or a MinerU directory and asks for slides, when they hand you an outline, when they want a demo video or supplementary clip inside a deck, or when they mention Prof. Huang Ching-Chun's lab meeting. Never build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
 license: Lab-internal use
 metadata:
-  version: "2.5.0"
+  version: "2.6.0"
   template_version: "acm_template.pptx (22 slides, 13.333in x 7.5in)"
 ---
 
@@ -39,22 +39,24 @@ skill folder.** Resolve the skill root once and prefix every script with it:
 ```bash
 SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/acm-pptx"
 [ -f "$SKILL_DIR/SKILL.md" ] || SKILL_DIR="$PWD/.codex/skills/acm-pptx"
+[ -f "$SKILL_DIR/SKILL.md" ] || SKILL_DIR="$HOME/.claude/skills/acm-pptx"
 [ -f "$SKILL_DIR/SKILL.md" ] || SKILL_DIR="$PWD/acm-pptx"
 ```
 
-That covers a Codex personal skill, a project skill, and a cloned repo. If none
-of the three exists, ask the user where they installed it.
+That covers a Codex personal skill, a project skill, a Claude Code skill and
+a cloned repo. If none exists, ask the user where they installed it. Commands
+below say `python3`; on a machine where only `python` exists, alias it once.
 
 ```bash
-python "$SKILL_DIR/scripts/build_from_outline.py" --roles        # role table
+python3 "$SKILL_DIR/scripts/build_from_outline.py" --roles        # role table
 # write outline.json  (schema: references/outline-schema.md
 #                      + visual fields: references/slide-patterns.md)
 DECK=2026-09-18-Report.pptx   # date + what it is; see naming below
-python "$SKILL_DIR/scripts/build_from_outline.py" outline.json -o "$DECK"   # text
-python "$SKILL_DIR/scripts/compose.py" outline.json "$DECK"                 # exhibits
-python "$SKILL_DIR/scripts/render_qa.py" outline.json "$DECK"               # gate + render what needs eyes
-python "$SKILL_DIR/scripts/qa_check.py" outline.json "$DECK" --review       # before handing it over
-python "$SKILL_DIR/scripts/office/validate.py" "$DECK" --original "$SKILL_DIR/assets/acm_template.pptx"
+python3 "$SKILL_DIR/scripts/build_from_outline.py" outline.json -o "$DECK"   # text
+python3 "$SKILL_DIR/scripts/compose.py" outline.json "$DECK"                 # exhibits
+python3 "$SKILL_DIR/scripts/render_qa.py" outline.json "$DECK"               # gate + render what needs eyes
+python3 "$SKILL_DIR/scripts/qa_check.py" outline.json "$DECK" --review       # before handing it over
+python3 "$SKILL_DIR/scripts/office/validate.py" "$DECK" --original "$SKILL_DIR/assets/acm_template.pptx"
 ```
 
 Two passes, in that order. `build_from_outline.py` clones role slides and
@@ -163,6 +165,12 @@ counts follow the material and speaking time, not a fixed quota.
   only for storage. Use one neutral fill, thin grey connectors, square alignment
   and whitespace. Reserve the lab red for the node or row currently being
   argued; do not make every node a rounded pastel card.
+- **Find the crop box before cropping.** `figure.py preview --pdf p.pdf
+  --page 3 -o page3.png` draws a 0.1 grid in page fractions; `figure.py
+  detect` prints candidate `--box` values for the figure blocks it finds.
+  Read the box off one image instead of iterating on crops. `--trim` cuts the
+  blank border, `--drop-caption` the caption line under it, and the arXiv
+  stamp in the left margin is excluded by default.
 - **Preserve useful source figures.** Crop and enlarge paper architecture
   figures, qualitative panels and plots with `scripts/figure.py` at 300 dpi;
   retain legends and cite the source. Re-plot when verified data is available
@@ -196,6 +204,20 @@ counts follow the material and speaking time, not a fixed quota.
   figure.
 - **Bullet tiers**: `level: 0` is the bold header tier, `level: 1` the
   bulleted tier. Never fake indentation with spaces or dashes.
+- **中文 is first-class.** Every run carrying CJK is written `lang="zh-TW"`
+  with an East-Asian typeface (`Microsoft JhengHei`; set `meta.cjk_font` to
+  change it), so LibreOffice previews stop overlapping glyphs and PowerPoint
+  stops guessing. The 40-word body cap counts 1.8 中文字 as one word, about
+  70 characters; a claim's length is judged the same way. Chinese captions
+  are set upright at 12pt or more, because italic CJK is a fake slant.
+- **Bullets at `level: 1` always indent.** A template slide with one tier
+  (the conclusion pages) gets a bulleted, indented tier synthesised, and the
+  build says so; a header-plus-children structure no longer flattens.
+- **Draw figures to the slot.** `compose.py --sizes` prints the exhibit box
+  per layout (`figure-right` 5.75×4.68in, `figure-full` 12.10×4.68in). Make
+  the plot that size and 12pt labels stay 12pt; make it twice the size and
+  they land at 6pt. On `figure-bottom` the text strip is only as tall as its
+  lines, so a one-line lead-in leaves the figure ~4.3in high instead of ~2.8.
 - **Speaker notes** carry what you would say — in 中文, technical terms in
   English, full sentences, three to six per content slide, no length limit.
   Terse slides are only safe when the notes are full.
@@ -220,8 +242,8 @@ you HEVC, VP9, `.mkv`, `.webm` — all of which build into a deck with no error
 and show a black rectangle in the meeting. Convert up front:
 
 ```bash
-python "$SKILL_DIR/scripts/video.py" probe raw.mov                    # playable?
-python "$SKILL_DIR/scripts/video.py" prep raw.mov -o figs/demo.mp4 --clip 0:03-0:18
+python3 "$SKILL_DIR/scripts/video.py" probe raw.mov                    # playable?
+python3 "$SKILL_DIR/scripts/video.py" prep raw.mov -o figs/demo.mp4 --clip 0:03-0:18
 ```
 
 Then name `figs/demo.mp4` in the outline. `compose.py` embeds it with the
@@ -247,12 +269,12 @@ user's job, in PowerPoint, once.
 
 ```bash
 markitdown deck.pptx                                    # read content
-python "$SKILL_DIR/scripts/thumbnail.py" deck.pptx deck-thumbs   # see layouts
+python3 "$SKILL_DIR/scripts/thumbnail.py" deck.pptx deck-thumbs   # see layouts
 python3 -c "import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall('unpacked')" deck.pptx
-python "$SKILL_DIR/scripts/add_slide.py" unpacked/ slide2.xml --after slide2.xml
-python "$SKILL_DIR/scripts/clean.py" unpacked/
+python3 "$SKILL_DIR/scripts/add_slide.py" unpacked/ slide2.xml --after slide2.xml
+python3 "$SKILL_DIR/scripts/clean.py" unpacked/
 (cd unpacked && rm -f ../out.pptx && zip -Xr ../out.pptx .)
-python "$SKILL_DIR/scripts/office/validate.py" out.pptx --original deck.pptx
+python3 "$SKILL_DIR/scripts/office/validate.py" out.pptx --original deck.pptx
 ```
 
 Do all structural work — add, delete, reorder — **before** editing any slide's
@@ -297,7 +319,8 @@ Work the loop this way:
 3. Fix what you saw by **editing `outline.json` in place** — a targeted string
    replacement on the one slide. Never re-emit the whole outline; at 25 slides
    that is ~10k output tokens to change one callout.
-4. Rebuild, then `render_qa.py --changed` — only the slides whose XML moved.
+4. Rebuild, then `render_qa.py --changed` — only the slides whose XML moved;
+   or `render_qa.py --pages 18-22` for exactly the slides you want to see.
 5. Once, at the end: `render_qa.py --all --contact 6` plus
    `qa_check.py --review`.
 

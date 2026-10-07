@@ -197,6 +197,14 @@ def set_paragraphs(tf, items) -> None:
     if not by_marl:
         by_marl[0] = deepcopy(tf.paragraphs[0]._p)
     tiers = [by_marl[k] for k in sorted(by_marl)]
+    deepest = max((spec["level"] for spec in norm), default=0)
+    if deepest > len(tiers) - 1:
+        # This template slide carries one tier only, so `level: 1` used to be
+        # flattened to the header tier without a word (feedback B5/F11).
+        # Synthesise an indented bulleted tier from the one that exists.
+        tiers.append(_indented_tier(tiers[-1], A))
+        print(f"  note: this slide's placeholder has no level-{deepest} style; "
+              f"an indented bulleted tier was synthesised", file=sys.stderr)
     max_tier = len(tiers) - 1
 
     body = tf._txBody
@@ -220,6 +228,25 @@ def set_paragraphs(tf, items) -> None:
                 extra._r.getparent().remove(extra._r)
         if spec.get("bold") is not None and para.runs:
             para.runs[0].font.bold = bool(spec["bold"])
+
+
+def _indented_tier(proto, A: str):
+    """A level-1 prototype: 0.5in margin, hanging bullet, regular weight."""
+    p = deepcopy(proto)
+    pPr = p.find(f"{A}pPr")
+    if pPr is None:
+        pPr = p.makeelement(f"{A}pPr", {})
+        p.insert(0, pPr)
+    pPr.set("marL", str(int(0.5 * 914400)))
+    pPr.set("indent", str(-int(0.25 * 914400)))
+    for tag in ("buNone", "buChar", "buAutoNum"):
+        for el in pPr.findall(f"{A}{tag}"):
+            pPr.remove(el)
+    pPr.append(pPr.makeelement(f"{A}buChar", {"char": "\u2022"}))
+    for rPr in p.iter(f"{A}rPr"):
+        if rPr.get("b") == "1":
+            rPr.set("b", "0")
+    return p
 
 
 def set_cell(cell, text: str) -> None:
@@ -324,11 +351,23 @@ def fill_generic(slide, spec: dict) -> None:
         set_paragraphs(body.text_frame, spec["bullets"])
     elif body is not None and spec.get("bullets") == []:
         set_paragraphs(body.text_frame, [""])
-    # drop the grey "if you don't have project..." hint once real content lands
+    # drop the grey "if you don't have project..." hint once real content
+    # lands. The subtitle used to be written into it as well, and compose then
+    # drew the same red line a second time (feedback B4); now it is blanked
+    # and the subtitle has one home.
     for sh in _text_shapes(slide):
         t = sh.text_frame.text.lower()
         if "just show this slides" in t and spec.get("bullets"):
-            set_paragraphs(sh.text_frame, [spec.get("subtitle", "")])
+            set_paragraphs(sh.text_frame, [""])
+    # the red claim line is drawn here too, so a skeleton-only build (feedback
+    # F7: user draws the content with their own script) still carries it
+    if spec.get("subtitle") and spec.get("layout") not in ("assertion-evidence", "ae"):
+        import compose
+        if title is not None:
+            compose.place(title, compose.TITLE)
+            from pptx.enum.text import MSO_ANCHOR
+            title.text_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+        compose.subtitle_box(slide, spec["subtitle"])
 
 
 def fill(out: Path, outline: dict) -> None:
@@ -347,6 +386,10 @@ def fill(out: Path, outline: dict) -> None:
             fill_generic(slide, spec)
         if spec.get("notes"):
             slide.notes_slide.notes_text_frame.text = spec["notes"]
+    # 中文 runs get lang="zh-TW" and an East-Asian typeface, or LibreOffice
+    # overlaps the glyphs and PowerPoint substitutes whatever it finds
+    import cjk
+    cjk.tag_deck(prs, cjk.font_from_outline(outline))
     prs.save(str(out))
 
 

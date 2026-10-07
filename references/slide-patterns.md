@@ -22,8 +22,9 @@ fill on every slide.
   "bullets": [ … ],                        // as before, <= 40 words total
 
   "figure": {
-    "src": "figs/fig3.png",
-    "caption": "Fig. 3  MGPM takes mesh UV maps and driving signals …",
+    "src": "figs/fig3.png",                 // or ["figs/eq1.png", "figs/fig3.png"]:
+    "stack": "column",                      // two parts of one exhibit, stacked
+    "caption": "Fig. 3  MGPM takes mesh UV maps and driving signals …",   // <= ~60 chars
     "source": "Kim et al., CVPR 2026"      // required for borrowed figures
   },
 
@@ -57,6 +58,8 @@ fill on every slide.
   "draw":     "design.py:timeline",         // your own function; see §Your own drawing
 
   "ours": true,                             // this slide is the presenter's, not the paper's
+  "custom": true,                           // you draw the exhibit yourself after the build;
+                                            // QA counts the shapes instead of the field
 
   "diagram": {                              // OR a native editable flowchart
     "direction": "LR",                     // LR, RL, TB or BT
@@ -158,8 +161,8 @@ open as a black rectangle in the meeting — with no error when the deck is
 built. So:
 
 ```bash
-python "$SKILL_DIR/scripts/video.py" probe capture.mov          # is it playable?
-python "$SKILL_DIR/scripts/video.py" prep capture.mov -o figs/demo.mp4 --clip 0:03-0:18
+python3 "$SKILL_DIR/scripts/video.py" probe capture.mov          # is it playable?
+python3 "$SKILL_DIR/scripts/video.py" prep capture.mov -o figs/demo.mp4 --clip 0:03-0:18
 ```
 
 `prep` re-encodes to H.264 High / yuv420p / AAC, caps the width at 1920, moves
@@ -309,6 +312,34 @@ metric. A deck where more than a third of the content slides are tables, or
 three tables in a row, gets a warning from `qa_check.py`; so does a run of
 three text-only slides.
 
+## Figure sizes, so labels survive
+
+`python3 scripts/compose.py --sizes` prints the exhibit box per layout. The
+numbers that matter:
+
+| layout | exhibit box (w × h, in) |
+|---|---|
+| `figure-right` | 5.75 × 4.68 |
+| `figure-left` | 5.52 × 4.68 |
+| `figure-bottom`, one-line lead-in | 12.10 × 4.3 |
+| `figure-bottom`, three lines | 12.10 × 3.3 |
+| `figure-full` | 12.10 × 4.68 |
+| `assertion-evidence` | 12.10 × 4.36 |
+
+A figure is scaled to fit its box, so its text scales with it: a matplotlib
+plot made with `figsize=(5.75, 4.5)` and 12pt labels keeps 12pt labels on a
+`figure-right` slide; the same plot made 12in wide lands at 6pt. Draw to the
+slot. For a paper crop, a block narrower than ~1.4× the slot width keeps its
+labels readable at 300 dpi; past that, crop to the component or go
+`figure-full`. The `figure-bottom` text strip is as tall as its lines and no
+more (0.22in + 0.35in per line), so one line of lead-in leaves most of the
+height to the figure.
+
+Two images that belong together, say the paper's equation and the figure it
+defines, go in one `figure` as `"src": [a, b]`, stacked in a column by
+default or `"stack": "row"` side by side. They share one caption and one
+source. Annotations on a stacked pair are fractions of the combined extent.
+
 ## Your own drawing
 
 When none of the shapes above is the right one, name a function:
@@ -329,6 +360,14 @@ colour) so the function needs no imports and matches the template.
 `assets/examples/design.py` is the reference implementation: copy it beside
 the outline and edit. `qa_check.py` counts a `draw` slide as carrying an
 exhibit, and errors if the file or function is missing.
+
+If you would rather run your own python-pptx script over the built deck
+instead of plugging into `compose.py`, mark those slides `"custom": true`.
+`build_from_outline.py` already draws the title, the red subtitle and the
+notes, and leaves the body placeholder for you to delete or fill;
+`qa_check.py` then counts the shapes actually on the slide (two or more
+beyond the template's own) instead of asking for an exhibit field, and
+errors if the script has not run yet.
 
 ## Coordinates
 
@@ -405,7 +444,7 @@ and that is the dimension where automatic decks are weakest. Before you hand a
 deck over:
 
 ```bash
-python "$SKILL_DIR/scripts/qa_check.py" outline.json talk.pptx --review
+python3 "$SKILL_DIR/scripts/qa_check.py" outline.json talk.pptx --review
 ```
 
 It prints the claim sequence on its own -- read it as one paragraph, the way
