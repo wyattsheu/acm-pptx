@@ -8,10 +8,22 @@
   "summary": {
     "note": "summarize what did you do within a week",
     "rows": [
-      ["Project Progress", "[Internal Tooling] ACM Slide Automation"],
-      ["Research Progress", "NONE (paused this week)"],
-      ["Paper Study", "NONE"],
-      ["Other Tasks", "Lab handbooks -> machine-readable slide rules"]
+      [
+        "Project Progress",
+        "[Internal Tooling] ACM Slide Automation"
+      ],
+      [
+        "Research Progress",
+        "NONE (paused this week)"
+      ],
+      [
+        "Paper Study",
+        "NONE"
+      ],
+      [
+        "Other Tasks",
+        "Lab handbooks -> machine-readable slide rules"
+      ]
     ],
     "tasks": [
       "🆕 Reverse-engineered the lab template into a 22-slide role map",
@@ -29,18 +41,54 @@
       "title": "Project Summary",
       "subtitle": "Internal tooling — no model training involved this week",
       "bullets": [
-        {"text": "Goal & Motivation (2 mins)", "level": 0},
-        {"text": "Weekly reports are re-typed into the template by hand", "level": 1},
-        {"text": "Objective: one command from outline to conformant deck", "level": 1},
-        {"text": "Current Architecture Recap (3 mins)", "level": 0},
-        {"text": "Role map: every template slide addressed by role", "level": 1},
-        {"text": "Builder: clone role slide, replace text, validate, QA", "level": 1},
-        {"text": "Current Status & Results (3 mins)", "level": 0},
-        {"text": "22/22 roles mapped; both packages build and validate", "level": 1},
-        {"text": "Discussion Items (2 mins)", "level": 0},
-        {"text": "Should outline.json be lab-wide, or stay personal?", "level": 1},
-        {"text": "Keeping the package in sync when the template is revised", "level": 1},
-        {"text": "Conclusion & Todolist", "level": 0}
+        {
+          "text": "Goal & Motivation (2 mins)",
+          "level": 0
+        },
+        {
+          "text": "Weekly reports are re-typed into the template by hand",
+          "level": 1
+        },
+        {
+          "text": "Objective: one command from outline to conformant deck",
+          "level": 1
+        },
+        {
+          "text": "Current Architecture Recap (3 mins)",
+          "level": 0
+        },
+        {
+          "text": "Role map: every template slide addressed by role",
+          "level": 1
+        },
+        {
+          "text": "Builder: clone role slide, replace text, validate, QA",
+          "level": 1
+        },
+        {
+          "text": "Current Status & Results (3 mins)",
+          "level": 0
+        },
+        {
+          "text": "22/22 roles mapped; both packages build and validate",
+          "level": 1
+        },
+        {
+          "text": "Discussion Items (2 mins)",
+          "level": 0
+        },
+        {
+          "text": "Should outline.json be lab-wide, or stay personal?",
+          "level": 1
+        },
+        {
+          "text": "Keeping the package in sync when the template is revised",
+          "level": 1
+        },
+        {
+          "text": "Conclusion & Todolist",
+          "level": 0
+        }
       ],
       "notes": "先說清楚這週是工具不是研究，免得老師以為我在做模型。整個報告大概三分鐘帶過，重點放在最後的討論題。如果老師問為什麼值得做，第三頁有量化的時間成本。"
     },
@@ -48,10 +96,22 @@
       "role": "project_why",
       "title": "Format compliance should not cost thinking time",
       "bullets": [
-        {"text": "Every member re-applies the template by hand, every week", "level": 0},
-        {"text": "Hand-copying drifts: wrong breadcrumb, placeholder text left in", "level": 0},
-        {"text": "The handbook rules are prose nobody re-reads before a meeting", "level": 0},
-        {"text": "Target: prep time goes to the argument, not the layout", "level": 0}
+        {
+          "text": "Every member re-applies the template by hand, every week",
+          "level": 0
+        },
+        {
+          "text": "Hand-copying drifts: wrong breadcrumb, placeholder text left in",
+          "level": 0
+        },
+        {
+          "text": "The handbook rules are prose nobody re-reads before a meeting",
+          "level": 0
+        },
+        {
+          "text": "Target: prep time goes to the argument, not the layout",
+          "level": 0
+        }
       ],
       "notes": "這頁的論點是成本不大但每週都在付。我自己量過，套版加檢查大概二十分鐘，一學期就是七八個小時。更麻煩的是手工複製會漂移，麵包屑跑到錯的段落、範本的佔位字留在投影片上，這些在會議上很難看。所以目標不是省時間，是把格式變成自動的。"
     },
@@ -86,9 +146,18 @@
       "subtitle": "Built from a 7-entry outline in one command, nothing hand-edited",
       "layout": "figure-right",
       "bullets": [
-        {"text": "22/22 roles mapped and cloned cleanly", "level": 0},
-        {"text": "Schema validation passes against the template baseline", "level": 0},
-        {"text": "No placeholder text survived the QA gate", "level": 0}
+        {
+          "text": "22/22 roles mapped and cloned cleanly",
+          "level": 0
+        },
+        {
+          "text": "Schema validation passes against the template baseline",
+          "level": 0
+        },
+        {
+          "text": "No placeholder text survived the QA gate",
+          "level": 0
+        }
       ],
       "video": {
         "src": "figs/demo.mp4",
@@ -103,9 +172,18 @@
       "role": "project_insight",
       "title": "Open: portability, and template drift",
       "bullets": [
-        {"text": "AnythingLLM has no sandbox — the plain skill emits only the outline", "level": 0},
-        {"text": "Fix: make outline.json the contract, so any executor can finish", "level": 0},
-        {"text": "A revised template silently stales the role map — version it?", "level": 0}
+        {
+          "text": "AnythingLLM has no sandbox — the plain skill emits only the outline",
+          "level": 0
+        },
+        {
+          "text": "Fix: make outline.json the contract, so any executor can finish",
+          "level": 0
+        },
+        {
+          "text": "A revised template silently stales the role map — version it?",
+          "level": 0
+        }
       ],
       "callout": {
         "label": "To discuss",

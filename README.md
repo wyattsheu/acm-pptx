@@ -14,8 +14,9 @@ ACM Lab (NYCU) PowerPoint 投影片生成工具 / Codex 與 Claude Skill。
 | `v2.0.0` | 新增 paper-study 支援、blueprint-paper 等 references |
 | `v2.1.0` | 新增 `qa_check --review`、Codex skill 支援 |
 | `v2.2.0` | 紅框改為稀用、標題承載論點；QA 只渲染需要看的頁面；輸出只留一份 .pptx |
-| `v2.3.0` | **支援嵌入影片**；QA 改成大部分不用渲染就查得出來；contact sheet 把看圖成本降到約三分之一 |
-| `v2.4.0` | 目前最新版。**原生可編輯流程圖**：nodes / edges / groups 自動排版成 PowerPoint shapes 與 connectors；表格依內容分配欄寬；QA 驗證 diagram 不是扁平圖片 |
+| `v2.3.0` | 支援嵌入影片；QA 改成大部分不用渲染就查得出來；contact sheet 把看圖成本降到約三分之一 |
+| `v2.4.0` | **原生可編輯流程圖**：nodes / edges / groups 自動排版成 PowerPoint shapes 與 connectors；表格依內容分配欄寬；QA 驗證 diagram 不是扁平圖片 |
+| `v2.5.0` | 目前最新版。**新增圖形版型** `cards` / `flow` / `bignum` / `quadrant`，表格改成會隨列數放大字；**每頁可指定自己的繪圖函式** `draw`；紅框座標統一（`at` 是 xywh，`xyxy` 是角點，寫錯會被擋）；`"ours": true` 標記自己的內容；QA 會抓「整份都是表格」「寬圖被塞進半欄」「論文報告沒有自己的觀點」 |
 
 ## 使用方式
 
@@ -42,6 +43,54 @@ git checkout v1.2.0
 ```bash
 git checkout main
 ```
+
+## v2.5.0 有什麼
+
+這版是針對第一批用它做出來的論文報告的回饋：16 頁裡 7 頁表格、2 頁純條列，
+表格字小、下半頁空白；論文的架構圖被壓到 5 吋寬看不清；整份都是論文的內容，
+沒有我們自己做了什麼；紅框座標照文件寫還是畫錯兩次。
+
+**圖形版型。** 以前一頁只能放條列、表格或一張圖，所以流程和對照全部變成表格。
+現在 `outline.json` 多了四種 exhibit，都畫在該段落的色調裡，並把要講的那一格標成紅色：
+
+| 欄位 | 畫什麼 | 用在 |
+|---|---|---|
+| `cards` | 2–6 張卡片，各有標題與幾行字 | related work 的幾個陣營、contributions、優缺點、能搬 / 不能搬到我們這邊的 |
+| `flow` | 方框加箭頭的流程，一格打亮 | 方法總覽，之後每頁講一格；`"style": "chevron"`、`"direction": "column"` 可選 |
+| `bignum` | 1–4 個大數字加標籤與 baseline | 整場報告的那一個結果，放在完整表格前面 |
+| `quadrant` | 兩軸定位圖，prior work 是點，我們的是紅點 | 這篇論文在領域裡的位置 |
+
+```jsonc
+"flow": {"steps": [{"label": "FLAME tracking", "sub": "UV maps"}, "MGPM",
+                   {"label": "Enhancer", "sub": "diffusion"}], "highlight": 2}
+"bignum": {"items": [{"value": "20 min", "label": "per-identity fitting",
+                      "sub": "CAP4D: 400 min", "highlight": true}]}
+```
+
+`matrix` 也重做了：字級隨列數決定（四列 18pt），列高撐到區域的七成，
+短表格會置中而不是縮在上面；多了 `highlight_col`、`col_widths`、`caption`。
+
+**自訂出口。** 四種版型不夠用時，一頁可以寫 `"draw": "design.py:timeline"`，
+`compose.py` 會把那一頁的 slide、留給 exhibit 的區域（英寸）、該頁的 outline
+和一組畫圖 helper 交給你的函式，標題、副標、條列、callout 都已經排好，
+在區域裡畫就不會疊到。`assets/examples/design.py` 是參考實作，複製到 outline 旁邊改。
+
+**座標只剩一種講法。** `annotations` 的 `at` 是 `[x, y, w, h]`，`figure.py crop`
+的 `--box` 是 `x0,y0,x1,y1`，以前文件沒把這兩件事放在一起講。現在 annotation
+和 `stage_figure` 都接受 `"xyxy": [x0, y0, x1, y1]`，有角點就直接寫角點不要換算；
+`x + w` 超出圖片邊緣（就是把角點寫進 `at` 的樣子）會被 `qa_check.py` 和
+`compose.py` 直接擋下來，訊息裡附對照表。
+
+**標記自己的東西。** `"ours": true` 會在左下角畫一個紅色 `OUR TAKE` 小標
+（給字串就畫那個字串），對應實驗室「作者主張 / 證據 / 報告者詮釋要分開」的規則。
+論文報告沒有任何一頁是 `ours` 會被 QA 警告。
+
+**QA 多抓的。** 表格超過內容頁的三分之一、連續三頁表格或三頁純文字、
+長寬比超過 1.8 的圖被排進半欄（會算出它實際落在幾吋寬）、`draw` 指到不存在的檔案或函式。
+
+**預設版型變了一點。** 沒寫 `layout` 時：有條列的 `matrix` / `cards` / `flow` /
+`bignum` 排在條列下面，沒條列就佔滿；`quadrant` 排在右邊；
+`text-only` 同時有條列和圖形時會自動改成上下排，不再疊在一起。
 
 ## v2.4.0 有什麼
 

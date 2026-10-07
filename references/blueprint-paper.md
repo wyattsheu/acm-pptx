@@ -48,10 +48,41 @@ the mechanisms and evidence this paper needs; do not pad sections to match it.
 | Method: overview then one slide per component | 6–7 | 7 min | `paper_method` ×7 |
 | Setup, quantitative, qualitative, ablation | 5–6 | 6 min | `paper_results` ×6 |
 | Takeaways, critique, relevance | 1–2 | 2 min | `paper_conclusion` |
+| **Our angle**: what we tried, what transfers, what we would do differently | 1 | 1 min | `paper_conclusion` with `"ours": true` |
 
 Roles repeat — that is intended, the breadcrumb stays on the right section.
 Measured against the two decks in `reference-decks.md`: 26 slides split
 5 / 5 / 7 / 6 / 1 across intro, related, method, results, conclusion.
+
+The last row is not optional. A deck that only relays the paper is the
+failure the first decks built with this skill had: sixteen slides, all of
+them the paper's, none of them ours. The meeting wants to know why *you* read
+it — what you tried, what maps onto our project, where you disagree. Put that
+on its own slide and mark it `"ours": true`; `qa_check.py` warns when a paper
+talk has none.
+
+## Which exhibit, per section
+
+Tables are the default a text generator falls into, and seven of them in a
+row is what the handbook means by "dense". The shapes in
+`slide-patterns.md` §Graphic exhibits exist so each section has a better one:
+
+| Section | Exhibit |
+|---|---|
+| Teaser | the paper's figure, `figure-full` or `assertion-evidence` |
+| Motivation / gap | `cards` for the camps and what each lacks, or a `quadrant` of the field with the empty corner named |
+| Contributions | `cards`, one per contribution, three at most |
+| Related work | `cards` per camp with a `callout` naming the limitation; a `matrix` only for the one feature-by-method comparison |
+| Method overview | `flow`, the stage of the next slide lit; then one slide per stage with the cropped figure on the right |
+| Method component | cropped figure (`figure-right`, or `figure-bottom` if it is wide) with a `box` on the component, plus the four questions as bullets |
+| Headline result | `bignum`, the winning number and its baseline, before the table |
+| Quantitative | `matrix`, `highlight_row` on the paper, `highlight_col` on the decisive metric |
+| Qualitative | `figure-full`, cropped to the three methods that matter |
+| Ablation | `bignum` or a short `matrix`; the question it answers in the subtitle |
+| Takeaways / our angle | `cards`: transfers / does not / next week, with `"ours": true` |
+
+A whole talk in cards is as monotonous as a whole talk in tables; the QA
+gate warns on three of the same shape in a row either way.
 
 ## Where the argument lives
 
@@ -76,7 +107,8 @@ quality/cost tradeoff, paired image crops for visual quality, or a compact
 `matrix` when exact cross-metric lookup matters. A readable crop of a paper
 plot or table is valid; trim irrelevant rows or panels without losing labels,
 conditions or caveats. Re-plot only from verified values. See
-`evidence-selection.md` for extraction and provenance.
+`evidence-selection.md` for extraction and provenance. Lead with the one number that decides it as a `bignum`, baseline named,
+before the full table.
 
 **Three statement types stay visibly separate**: author claim, evidence,
 presenter interpretation. Label interpretations in the title, caption or body

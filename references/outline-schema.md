@@ -40,6 +40,12 @@ lets the plain skill hand work off to the executable one.
       "notes": "Speaker notes, in 中文, full sentences, 3-6 per content slide, no length limit. The argument, the numbers you'll quote and their baseline, the questions you expect."
     },
     {
+      "role": "project_pipeline",
+      "title": "Outline in, template-conformant deck out",
+      "flow": {"steps": ["outline.json", "build", "compose", "QA"], "highlight": 3},
+      "ours": true                                  // graphic exhibits (cards, flow,
+    },                                              // bignum, quadrant, draw) and the
+    {                                               // `ours` tag: slide-patterns.md
       "role": "project_results",
       "title": "Tracking holds through the fast turn",
       "video": {                                    // exhibits: see slide-patterns.md
@@ -95,6 +101,8 @@ lets the plain skill hand work off to the executable one.
 - `diagram` creates editable PowerPoint objects. Node `id` values must be
   unique and every edge endpoint must name one. Coordinates are optional;
   automatic LR/RL/TB/BT layout is the default. See `slide-patterns.md`.
+- The same holds for `matrix`, `cards`, `flow`, `bignum`, `quadrant` and `draw`:
+  one graphic exhibit per slide, and the builder refuses a slide carrying two.
 - `level` maps onto the template's own indent tiers, discovered per slide from
   the template's `marL` values. A level above the deepest available tier
   clamps to the deepest. Never fake indentation with spaces or dashes.

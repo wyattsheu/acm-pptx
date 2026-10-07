@@ -41,6 +41,30 @@ Debian:  sudo apt install poppler-utils ffmpeg libreoffice
 `markitdown` is only needed to read existing decks; `ffmpeg`/`ffprobe` only to
 embed video. MinerU is optional and never required.
 
+## What changed in v2.5.0
+
+**Graphic exhibits.** `cards`, `flow`, `bignum` and `quadrant` fields on a
+slide, drawn by the new `scripts/exhibits.py` in the section colour of the
+slide's role, one element lit in red. They take the figure slot and obey the
+same layouts, so they never overlap the bullets. `matrix` now sizes its type
+to the row count and the box, grows its rows to fill the region, and takes
+`highlight_col`, `col_widths` and `caption`.
+
+**Custom draw hook.** `"draw": "design.py:fn"` calls your own
+`fn(slide, box, spec, kit)` with the exhibit region already computed.
+`assets/examples/design.py` is the reference implementation.
+
+**One coordinate convention.** `annotations[].at` is `[x, y, w, h]`;
+`annotations[].xyxy` and `stage_figure.stages.*.xyxy` take corners the way
+`figure.py crop --box` does. A box past the picture edge is refused with the
+conversion table in the message.
+
+**`"ours": true`.** A small `OUR TAKE` tag; a paper talk without one warns.
+
+**QA.** Warns on table share over a third, three tables or three text-only
+slides in a row, a wide figure squeezed into a half column (it computes the
+placed width), and errors on a missing `draw` target.
+
 ## What changed in v2.4.0
 
 **Editable diagrams, not diagram pictures.** `outline.json` now accepts a

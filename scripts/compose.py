@@ -4,8 +4,10 @@
 build_from_outline.py clones template slides and fills text. This adds the
 things a paper talk actually needs: a red claim line under the title, a
 figure with its caption, annotations drawn on that figure, a comparison
-matrix, a native editable diagram, an equation band, an embedded video, and
-the bottom callout.
+matrix, a native editable diagram, an equation band, an embedded video, the
+bottom callout -- and the graphic exhibits a paper talk is otherwise missing:
+cards, a flow, big numbers, a positioning map, or your own draw function
+(scripts/exhibits.py).
 
     python scripts/build_from_outline.py outline.json -o talk.pptx
     python scripts/compose.py outline.json talk.pptx
@@ -29,12 +31,15 @@ from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
+import exhibits
+
 # ---------------------------------------------------------------- palette
 RED = RGBColor(0xC0, 0x00, 0x00)      # claim line, callout frame, annotations
 GREY = RGBColor(0x59, 0x59, 0x59)     # captions
 HEAD_BG = RGBColor(0x3E, 0x4A, 0x5B)  # matrix header
 HEAD_FG = RGBColor(0xFF, 0xFF, 0xFF)
 ROW_HI = RGBColor(0xE8, 0xF2, 0xE1)   # the "Ours" row
+COL_HI = RGBColor(0xF6, 0xF1, 0xE4)   # the decisive metric column
 BAND = RGBColor(0xF2, 0xF2, 0xF2)     # equation band
 DIAGRAM_FILL = RGBColor(0xFA, 0xFA, 0xFA)
 DIAGRAM_LINE = RGBColor(0x5B, 0x67, 0x78)
@@ -61,6 +66,32 @@ ASSERT_TOP = 2.10                   # evidence starts below it
 DIVIDER = RGBColor(0xC8, 0xCC, 0xD2)
 
 
+WIDE_GRAPHICS = ("cards", "flow", "bignum", "matrix", "draw")
+GRAPHICS = exhibits.GRAPHIC_KEYS + ("matrix", "diagram")   # one of these per slide
+
+
+def default_layout(spec: dict) -> str:
+    """Where the exhibit goes when the outline does not say.
+
+    A wide graphic (cards, flow, numbers, a table) with bullets sits under
+    them; alone it takes the whole content region. A quadrant is square, so
+    it shares the slide side by side. A figure defaults to the bottom, which
+    is the one place a paper's wide architecture diagram stays legible.
+    """
+    has_bullets = bool(spec.get("bullets"))
+    if spec.get("video") or spec.get("diagram"):
+        return "figure-right" if has_bullets else "figure-full"
+    if spec.get("quadrant"):
+        return "figure-right" if has_bullets else "figure-full"
+    if any(spec.get(k) for k in WIDE_GRAPHICS):
+        return "figure-bottom" if has_bullets else "figure-full"
+    if spec.get("figure"):
+        return "figure-bottom"
+    if spec.get("stage"):
+        return "figure-right"   # the pipeline strip lives where a figure would
+    return "text-only"
+
+
 def regions(spec: dict) -> dict:
     """Body box and figure box, in inches, for this slide's layout."""
     top = CONTENT_TOP_SUB if spec.get("subtitle") else CONTENT_TOP_PLAIN
@@ -69,14 +100,11 @@ def regions(spec: dict) -> dict:
     w = RIGHT - LEFT
     layout = spec.get("layout")
     if not layout:
-        if spec.get("video") or spec.get("diagram"):
-            layout = "figure-right" if spec.get("bullets") else "figure-full"
-        elif spec.get("figure"):
-            layout = "figure-bottom"
-        elif spec.get("stage"):
-            layout = "figure-right"   # the pipeline strip lives where a figure would
-        else:
-            layout = "text-only"
+        layout = default_layout(spec)
+    elif layout == "text-only" and spec.get("bullets") and any(
+            spec.get(k) for k in WIDE_GRAPHICS + ("quadrant", "diagram")):
+        # bullets and a graphic cannot share one column; stack them
+        layout = "figure-bottom"
 
     span = (top, bottom)
     if layout in ("assertion-evidence", "ae"):
@@ -351,9 +379,15 @@ def add_annotations(slide, spec, rect) -> None:
     for a in spec.get("annotations", []):
         kind = a.get("type", "box")
         colour = RGBColor.from_string(a.get("color", "C00000"))
-        at = a["at"]
+        at = a["at"] if "at" in a else xyxy_to_xywh(a["xyxy"])
         if kind in ("box", "circle"):
             x, y, w, h = at
+            if x + w > 1.02 or y + h > 1.02:
+                raise SystemExit(
+                    f"annotation {kind} at {at} runs past the picture edge. `at` is "
+                    f"[x, y, w, h] as fractions of the picture; if you have corners "
+                    f"(x0, y0, x1, y1), the way figure.py crop takes them, write "
+                    f"`\"xyxy\": [...]` instead.")
             shp = slide.shapes.add_shape(
                 MSO_SHAPE.OVAL if kind == "circle" else MSO_SHAPE.RECTANGLE,
                 Inches(fx + x * fw), Inches(fy + y * fh),
@@ -383,6 +417,14 @@ def add_annotations(slide, spec, rect) -> None:
             textbox(slide, (fx + x * fw, fy + y * fh, 3.4, 0.36),
                     a.get("text", ""), a.get("size", 13), color=colour,
                     bold=True, wrap=False)
+
+
+def xyxy_to_xywh(b) -> list[float]:
+    """Corners (x0, y0, x1, y1) -> (x, y, w, h). Both are fractions of the picture."""
+    x0, y0, x1, y1 = b
+    if x1 < x0 or y1 < y0:
+        raise SystemExit(f"xyxy box {b} has its corners the wrong way round")
+    return [x0, y0, x1 - x0, y1 - y0]
 
 
 def _arrowhead(connector) -> None:
@@ -421,49 +463,100 @@ def add_callout(slide, spec) -> None:
 
 
 def add_matrix(slide, spec, box) -> None:
+    """A comparison table sized to the room it has, not to a fixed 12.5pt.
+
+        "matrix": {
+          "header": ["Method", "Duration", "PSNR", "CSIM"],
+          "rows": [...],
+          "highlight_row": 4,           // 1-based; also accepts a list
+          "highlight_col": 2,           // 1-based; the decisive metric
+          "col_widths": [2.2, 1, 1, 1], // relative; first column wider by default
+          "caption": "Self re-enactment on INSTA; higher is better except LPIPS",
+          "size": 16                    // override the computed font size
+        }
+
+    Type scales with the number of rows and the box height, rows grow to
+    fill up to ~70% of the region, and a short table is centred in it, so
+    a four-row comparison no longer sits at 12.5pt above half a page of
+    white space.
+    """
     m = spec["matrix"]
     header, rows = m["header"], m["rows"]
-    hi = m.get("highlight_row")
+    hi_rows = m.get("highlight_row")
+    hi_rows = set(hi_rows if isinstance(hi_rows, list) else ([hi_rows] if hi_rows else []))
+    hi_col = m.get("highlight_col")
     x, y, w, h = box
     n_rows, n_cols = len(rows) + 1, len(header)
-    height = min(h, 0.42 + 0.40 * len(rows))
-    gf = slide.shapes.add_table(n_rows, n_cols, Inches(x), Inches(y),
+
+    # row height: enough for the type, capped so the table does not balloon
+    size = m.get("size")
+    if size is None:
+        size = 18 if n_rows <= 4 else 16 if n_rows <= 6 else 14 if n_rows <= 9 else 12
+    row_h = max(0.36, min(0.62, size * 2.3 / 72))
+    cap_h = 0.32 if m.get("caption") else 0
+    height = row_h * n_rows
+    avail = h - cap_h
+    if height > avail:                        # too many rows: shrink to fit
+        row_h = avail / n_rows
+        size = max(10, min(size, row_h * 72 / 2.3))
+        height = avail
+    top = y + max(0.0, (avail - height) * 0.35) if height < avail * 0.6 else y
+
+    widths = m.get("col_widths")
+    if not widths:
+        # equal columns are a generated-deck tell and waste width on short
+        # numeric metrics: weight each column by its longest cell, label
+        # column slightly favoured, no column allowed to dominate
+        widths = []
+        for c in range(n_cols):
+            values = [str(header[c])] + [str(row[c]) for row in rows if c < len(row)]
+            widths.append(max(4, min(28, max(len(v) for v in values))))
+        widths[0] *= 1.22
+    if len(widths) != n_cols:
+        raise SystemExit(f"matrix: col_widths has {len(widths)} entries for {n_cols} columns")
+    unit = w / sum(widths)
+
+    gf = slide.shapes.add_table(n_rows, n_cols, Inches(x), Inches(top),
                                 Inches(w), Inches(height))
     table = gf.table
     table.first_row = True
-    # Equal-width columns are a strong generated-deck tell and waste space on
-    # short numeric metrics. Allocate width from actual content, with the label
-    # column receiving a modest priority but no column allowed to dominate.
-    lengths = []
-    for c in range(n_cols):
-        values = [str(header[c])] + [str(row[c]) for row in rows if c < len(row)]
-        lengths.append(max(4, min(28, max(len(value) for value in values))))
-    if n_cols:
-        lengths[0] *= 1.22
-    total = sum(lengths)
-    for c, weight in enumerate(lengths):
-        table.columns[c].width = Inches(w * weight / total)
-    table.rows[0].height = Inches(0.42)
+    for c, frac in enumerate(widths):
+        table.columns[c].width = Inches(frac * unit)
+    for r in range(n_rows):
+        table.rows[r].height = Inches(row_h)
+
     for c, txt in enumerate(header):
         cell = table.cell(0, c)
         cell.text = str(txt)
         cell.fill.solid()
         cell.fill.fore_color.rgb = HEAD_BG
-        _style_cell(cell, 13, bold=True, color=HEAD_FG,
+        _style_cell(cell, size, bold=True, color=HEAD_FG,
                     align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
     for r, row in enumerate(rows, start=1):
         table.rows[r].height = Inches(max(0.34, (height - 0.42) / max(1, len(rows))))
         for c, txt in enumerate(row[:n_cols]):
             cell = table.cell(r, c)
             cell.text = str(txt)
-            if hi is not None and r == hi:
-                cell.fill.solid()
-                cell.fill.fore_color.rgb = ROW_HI
+            lit_row = r in hi_rows
+            lit_col = hi_col is not None and c + 1 == hi_col
+            if lit_row and lit_col:
+                cell.fill.solid(); cell.fill.fore_color.rgb = ROW_HI
+                _style_cell(cell, size, bold=True, color=RED, align=PP_ALIGN.CENTER)
+            elif lit_row:
+                cell.fill.solid(); cell.fill.fore_color.rgb = ROW_HI
+                _style_cell(cell, size, bold=True,
+                            align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
+            elif lit_col:
+                cell.fill.solid(); cell.fill.fore_color.rgb = COL_HI
+                _style_cell(cell, size, bold=False,
+                            align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
             else:
                 cell.fill.background()
-            _style_cell(cell, 12.5,
-                        bold=(c == 0 or (hi is not None and r == hi)),
-                        align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
+                _style_cell(cell, size, bold=(c == 0),
+                            align=PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER)
+    if m.get("caption"):
+        textbox(slide, (x, top + height + 0.06, w, 0.28), m["caption"], 11,
+                color=GREY, italic=True, align=PP_ALIGN.CENTER)
 
 
 # ---------------------------------------------------------------- native diagrams
@@ -844,6 +937,12 @@ def add_stage(slide, spec, stage_figure, box) -> None:
     at = (stage_figure.get("stages") or {}).get(name)
     if at is None:
         raise SystemExit(f"stage {name!r} is not in stage_figure.stages")
+    if isinstance(at, dict):
+        at = at["at"] if "at" in at else xyxy_to_xywh(at["xyxy"])
+    elif at[0] + at[2] > 1.02 or at[1] + at[3] > 1.02:
+        raise SystemExit(
+            f"stage {name!r} box {at} runs past the picture edge: stages are "
+            f"[x, y, w, h] fractions; for corners write {{\"xyxy\": [x0, y0, x1, y1]}}")
 
     x, y, w, _ = box
     iw, ih = Image.open(src).size
@@ -856,6 +955,40 @@ def add_stage(slide, spec, stage_figure, box) -> None:
         textbox(slide, (x, rect[1] + rect[3] + 0.04, w, 0.24),
                 stage_figure["caption"], 10, color=GREY, italic=True,
                 align=PP_ALIGN.CENTER)
+
+
+OURS_BOX = (0.92, 6.90, 1.9, 0.26)   # bottom-left, clear of the page number
+
+
+def add_ours(slide, spec) -> None:
+    """A small tag that says this slide is the presenter's, not the paper's.
+
+    The lab rule keeps author claim, evidence and presenter interpretation
+    visibly separate; this is the visible part. `"ours": true` draws
+    `OUR TAKE`; a string draws that string (`OUR EXPERIMENT`, `我們的實驗`).
+    """
+    o = spec["ours"]
+    label = o if isinstance(o, str) else "OUR TAKE"
+    x, y, w, h = OURS_BOX
+    w = max(w, 0.3 + 0.1 * len(label))
+    shp = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
+                                 Inches(x), Inches(y), Inches(w), Inches(h))
+    strip_style(shp)
+    shp.fill.solid()
+    shp.fill.fore_color.rgb = RED
+    shp.line.fill.background()
+    shp.shadow.inherit = False
+    tf = shp.text_frame
+    tf.word_wrap = False
+    tf.margin_left = tf.margin_right = Inches(0.08)
+    tf.margin_top = tf.margin_bottom = 0
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    r = p.add_run()
+    r.text = label
+    r.font.size, r.font.bold = Pt(10), True
+    r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
 
 def add_divider(slide, reg) -> None:
@@ -886,7 +1019,8 @@ def flatten(outline: dict) -> list[dict]:
 
 
 VISUAL_KEYS = ("subtitle", "figure", "video", "diagram", "annotations",
-               "callout", "matrix", "equation", "stage", "divider")
+               "callout", "matrix", "equation", "stage", "divider",
+               "ours") + exhibits.GRAPHIC_KEYS
 
 
 STAMP = "acm-composed"          # so a second pass cannot silently double every shape
@@ -954,16 +1088,34 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
 
         if eq_box:
             add_equation(slide, spec, eq_box, outline_dir, str(idx))
-        if spec.get("matrix"):
-            add_matrix(slide, spec, reg["body"] or reg["fig"])
-        if spec.get("diagram") and reg["fig"]:
-            conflicts = [key for key in ("figure", "video", "stage", "matrix", "equation")
-                         if spec.get(key)]
-            if conflicts:
-                raise SystemExit(f"slide {idx} has `diagram` plus {', '.join(conflicts)} "
-                                 f"- one exhibit per slide; split them")
-            add_diagram(slide, spec, reg["fig"])
-        elif spec.get("stage") and reg["fig"]:
+
+        # graphic exhibits take the figure slot; without one (text-only) they
+        # take the body, which the bullets have already given up
+        graphic = [k for k in GRAPHICS if spec.get(k)]
+        if len(graphic) > 1:
+            raise SystemExit(f"slide {idx} carries {' + '.join(graphic)} - one exhibit "
+                             f"per slide; split it")
+        if graphic and (spec.get("figure") or spec.get("video")):
+            raise SystemExit(f"slide {idx} has {graphic[0]} and a figure/video - one "
+                             f"exhibit per slide; split it")
+        if graphic and graphic[0] == "diagram" and (spec.get("stage") or spec.get("equation")):
+            raise SystemExit(f"slide {idx} has `diagram` plus stage/equation - one "
+                             f"exhibit per slide; split them")
+        if graphic:
+            kind = graphic[0]
+            gbox = reg["fig"] or reg["body"]
+            if gbox is None:
+                raise SystemExit(f"slide {idx}: no room for {kind} in layout {reg['layout']}")
+            accent = exhibits.accent_for(spec.get("role", ""))
+            if kind == "matrix":
+                add_matrix(slide, spec, gbox)
+            elif kind == "diagram":
+                add_diagram(slide, spec, gbox)
+            elif kind == "draw":
+                exhibits.run_custom(slide, spec, gbox, accent, outline_dir, idx)
+            else:
+                exhibits.DRAW[kind](slide, spec, gbox, accent)
+        if spec.get("stage") and reg["fig"]:
             if not stage_figure:
                 raise SystemExit(f"slide {idx} sets `stage` but the outline has no "
                                  f"top-level `stage_figure`")
@@ -987,6 +1139,8 @@ def compose(outline_path: Path, deck: Path, out: Path | None = None,
             add_divider(slide, reg)
         if spec.get("callout"):
             add_callout(slide, spec)
+        if spec.get("ours"):
+            add_ours(slide, spec)
 
     out = out or deck
     prs.core_properties.content_status = STAMP

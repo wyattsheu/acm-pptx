@@ -60,6 +60,48 @@
     {
       "role": "paper_related",
       "title": "Related Work",
+      "subtitle": "Two families of prior, two opposite failure modes",
+      "cards": {
+        "items": [
+          {
+            "title": "Per-identity overfitting",
+            "tag": "FlashAvatar, SplattingAvatar",
+            "bullets": [
+              "Fits one subject from a video",
+              "Sharp, but 10-400 min each",
+              "Drifts off identity on unseen poses"
+            ]
+          },
+          {
+            "title": "3D generative prior",
+            "tag": "CAP4D and kin",
+            "bullets": [
+              "One forward pass, any identity",
+              "Good initialization",
+              "Soft detail: the prior averages faces"
+            ]
+          },
+          {
+            "title": "2D diffusion prior",
+            "tag": "image enhancers",
+            "highlight": true,
+            "bullets": [
+              "Photoreal supervision",
+              "No 3D consistency on its own",
+              "The piece ELITE borrows"
+            ]
+          }
+        ]
+      },
+      "callout": {
+        "label": "Gap",
+        "text": "Nobody has both good initialization and good supervision"
+      },
+      "notes": "三個陣營各自解決一個問題。第一個陣營畫質好但每個人要重新 fit，而且姿勢一變 identity 就跑掉。第二個陣營一次 forward 就有初始化，但細節被先驗平均掉。第三個陣營的監督訊號最真實，可是本身沒有 3D 一致性。ELITE 的主張是把第二和第三個接起來，這一頁的紅框卡片就是它借走的那塊。"
+    },
+    {
+      "role": "paper_related",
+      "title": "Related Work",
       "subtitle": "Nobody has both good initialization and good supervision",
       "layout": "text-only",
       "matrix": {
@@ -103,6 +145,43 @@
         "highlight_row": 4
       },
       "notes": "三個陣營各缺一半。Overfitting 完全沒有 prior。3D data prior 有好的初始化，但 test time 的監督訊號還是只有那幾張輸入影格。2D generative prior 有生成的監督訊號，卻是從 pure noise 出發，慢而且會掉 identity。作者的切入點是這兩個有用的成分從來沒有被合起來用過。"
+    },
+    {
+      "role": "paper_method",
+      "title": "Proposed Method",
+      "subtitle": "Prior, adapt, enhance, adapt again: one network, four stages",
+      "bullets": [
+        {
+          "text": "Only MGPM is trained offline; everything after it is minutes of fine-tuning",
+          "level": 0
+        }
+      ],
+      "flow": {
+        "steps": [
+          {
+            "label": "FLAME tracking",
+            "sub": "UV texture + geometry"
+          },
+          {
+            "label": "MGPM",
+            "sub": "feed-forward 2D Gaussians"
+          },
+          {
+            "label": "Fine-tune 1",
+            "sub": "3 real frames"
+          },
+          {
+            "label": "Enhancer",
+            "sub": "diffusion, from own render"
+          },
+          {
+            "label": "Fine-tune 2",
+            "sub": "enhanced synthetic"
+          }
+        ],
+        "highlight": 2
+      },
+      "notes": "這頁先把整條 pipeline 走一遍，後面每一頁只講一個方框。追蹤得到 UV map，MGPM 一次 forward 給出完整的 Gaussian avatar，接著用三張真實影格微調，再用 enhancer 把自己 render 出來的影像修成照片等級，最後再微調一次。紅框是接下來那一頁要講的階段。"
     },
     {
       "role": "paper_method",
@@ -164,6 +243,32 @@
         }
       },
       "notes": "這頁把兩階段適應拆開講。第一次用三張真實影格適應，得到 identity-specific 的先驗；第二次用 enhancer 清過的合成影像再適應一次。重點是兩次用的是同一個網路，沒有新架構，所以成本就是兩輪 fine-tune。"
+    },
+    {
+      "role": "paper_results",
+      "title": "Experimental Results",
+      "subtitle": "Twenty minutes beats four hundred on the metric CAP4D should own",
+      "bignum": {
+        "items": [
+          {
+            "value": "20 min",
+            "label": "per-identity fitting",
+            "sub": "CAP4D: 400 min",
+            "highlight": true
+          },
+          {
+            "value": "0.740",
+            "label": "CSIM (identity)",
+            "sub": "CAP4D: 0.706"
+          },
+          {
+            "value": "25.2 dB",
+            "label": "PSNR",
+            "sub": "SplattingAvatar: 24.8"
+          }
+        ]
+      },
+      "notes": "這頁只放三個數字，表格在下一頁。時間是二十分之一，identity 卻贏過本來該最強的 CAP4D。我的詮釋是監督影像的品質比監督的數量更關鍵。老師可能會問 SSIM，SSIM 略輸 SplattingAvatar，我會直接承認。"
     },
     {
       "role": "paper_results",
@@ -248,6 +353,39 @@
         }
       ],
       "notes": "三個 takeaway 要留在螢幕上給 Q&A 用。作者自己承認的限制是依賴 FLAME tracking 的品質。我自己看到的問題是 ablation 沒有把 enhancer 跟更好的初始化分開，所以 20 分鐘這個數字有多少來自哪一邊其實不確定。可能被問到的問題：MGPM 沒看過的族群會怎樣、tracking 失敗時整條 pipeline 會不會崩。"
+    },
+    {
+      "role": "paper_conclusion",
+      "title": "What this means for us",
+      "subtitle": "The enhancer trick transfers; the FLAME dependency does not",
+      "ours": true,
+      "cards": {
+        "items": [
+          {
+            "title": "Transfers",
+            "bullets": [
+              "Render-then-enhance supervision fits our tracker",
+              "Two fine-tunes, no new architecture"
+            ]
+          },
+          {
+            "title": "Does not transfer",
+            "bullets": [
+              "Needs FLAME-quality tracking",
+              "Our subjects are not faces"
+            ]
+          },
+          {
+            "title": "Next week",
+            "highlight": true,
+            "bullets": [
+              "Try render-then-enhance on 3 of our sequences",
+              "Report CSIM-style identity drift"
+            ]
+          }
+        ]
+      },
+      "notes": "最後一頁是我自己的看法，不是論文的主張。可以搬過來的是「先 render 再用 diffusion 修、再拿修好的當監督」這個迴圈。搬不過來的是它整條 pipeline 都綁在 FLAME 上。下週我會在我們自己的三段序列上試一次，用同樣的 identity 指標回報。"
     }
   ],
   "stage_figure": {

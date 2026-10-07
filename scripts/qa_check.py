@@ -35,7 +35,12 @@ EXEMPT = {"cover", "summary", "paper_list", "project_summary", "research_summary
 
 # What each functional slide type must carry. PPTAgent's Stage I calls this a
 # content schema; here it is the machine-checkable half of slide-patterns.md.
-EXHIBIT_KEYS = ("figure", "video", "diagram", "matrix", "equation", "stage", "table")
+EXHIBIT_KEYS = ("figure", "video", "diagram", "matrix", "equation", "stage",
+                "table", "cards", "flow", "bignum", "quadrant", "draw")
+TABLE_KEYS = ("matrix", "table")
+TABLE_MAX = 0.35              # WARN: past this the deck is a spreadsheet
+RUN_MAX = 3                   # WARN: this many table-only or text-only slides in a row
+SQUEEZED_W = 7.0              # WARN: a wide figure placed narrower than this
 ROLE_SCHEMA = {
     "paper_method":     {"exhibit": "error"},
     "paper_results":    {"exhibit": "error"},
@@ -184,6 +189,43 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
         if not any(spec.get(k) for k in EXHIBIT_KEYS):
             text_only += 1
 
+        # 3c. annotation boxes: `at` is [x, y, w, h]; `xyxy` is corners. A box
+        # that runs past the picture edge is the signature of corners written
+        # into `at`, which is the mistake figure.py's crop syntax invites.
+        for a in spec.get("annotations") or []:
+            kind = a.get("type", "box")
+            if "xyxy" in a:
+                x0, y0, x1, y1 = a["xyxy"]
+                if x1 <= x0 or y1 <= y0:
+                    errors.append(f"{tag}: annotation xyxy {a['xyxy']} has its corners "
+                                  f"the wrong way round")
+            elif kind in ("box", "circle") and "at" in a:
+                x, y, w, h = a["at"]
+                if x + w > 1.02 or y + h > 1.02:
+                    errors.append(f"{tag}: annotation `at` {a['at']} runs past the "
+                                  f"picture edge - `at` is [x, y, w, h]; for corners "
+                                  f"(as figure.py crop takes them) write `xyxy`")
+            elif "at" not in a and "xyxy" not in a:
+                errors.append(f"{tag}: annotation has neither `at` nor `xyxy`")
+
+        # 3d. a wide figure in a half column is unreadable: compute where it
+        # lands and say so, instead of leaving it for the render
+        if isinstance(fig, dict) and fig.get("src") and Path(fig["src"]).exists():
+            placed = _placed_figure(spec, fig["src"])
+            if placed is not None:
+                pw, ph, aspect = placed
+                if aspect >= 1.8 and pw < SQUEEZED_W:
+                    warns.append(f"{tag}: figure is {aspect:.1f}:1 but lands {pw:.1f}in "
+                                 f"wide in layout {spec.get('layout')!r} - its labels "
+                                 f"will not read; use figure-bottom / figure-full, or "
+                                 f"crop to the component this slide is about")
+
+        # 3e. a custom draw function must exist before the build is attempted
+        if spec.get("draw"):
+            msg = _draw_target_issue(spec["draw"])
+            if msg:
+                errors.append(f"{tag}: {msg}")
+
         # 4. what this functional slide type must carry
         schema = ROLE_SCHEMA.get(role, {})
         for key, severity in schema.items():
@@ -192,7 +234,8 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
                 msg = (f"{tag}: a {role} slide with no exhibit - use a figure, "
                        f"native diagram, matrix or equation")
             else:
-                ok = bool(spec.get(key))
+                # the takeaways may be cards instead of bullets
+                ok = bool(spec.get(key)) or (key == "bullets" and bool(spec.get("cards")))
                 msg = f"{tag}: {role} slide is missing `{key}`"
             if not ok:
                 (errors if severity == "error" else warns).append(msg)
@@ -227,7 +270,89 @@ def check_outline(flat: list[dict]) -> tuple[list[str], list[str]]:
         if ratio > TEXT_ONLY_MAX:
             warns.append(f"{text_only}/{len(content)} content slides carry no exhibit "
                          f"({ratio:.0%}); the reference decks sit at 8-12%")
+    warns.extend(texture_warnings(flat))
     return errors, warns
+
+
+def _placed_figure(spec: dict, src: str):
+    """(width, height, aspect) the figure gets under this slide's layout."""
+    try:
+        import compose
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        iw, ih = Image.open(src).size
+    except Exception:
+        return None
+    reg = compose.regions(spec)
+    if not reg.get("fig"):
+        return None
+    x, y, w, h = reg["fig"]
+    if isinstance(spec.get("figure"), dict) and spec["figure"].get("caption"):
+        h -= compose.CAPTION_H
+    _, _, fw, fh = compose.fit((x, y, w, h), iw, ih)
+    return fw, fh, iw / ih
+
+
+def _draw_target_issue(target: str) -> str | None:
+    if ":" not in str(target):
+        return f"`draw` must be 'file.py:function', got {target!r}"
+    mod, fn = str(target).rsplit(":", 1)
+    if not Path(mod).exists():
+        return f"draw module {mod!r} not found (resolved from the working directory)"
+    import re as _re
+    if not _re.search(rf"^def\s+{_re.escape(fn)}\s*\(", Path(mod).read_text(encoding="utf-8"), _re.M):
+        return f"{mod} defines no function {fn!r}"
+    return None
+
+
+def texture_warnings(flat: list[dict]) -> list[str]:
+    """The deck-level failure the per-slide checks cannot see: monotony.
+
+    Sixteen slides of which seven are tables and two are bare bullets is a
+    spreadsheet with a title band, and it passed every per-slide rule. So:
+    cap the table share, break runs of the same shape, and ask a paper talk
+    to carry at least one slide of the presenter's own.
+    """
+    out = []
+    content = [s for s in flat if s.get("role") not in EXEMPT]
+    if not content:
+        return out
+
+    def shape(spec):
+        if any(spec.get(k) for k in TABLE_KEYS):
+            return "table"
+        if any(spec.get(k) for k in EXHIBIT_KEYS):
+            return "graphic"
+        return "text"
+
+    shapes = [shape(s) for s in content]
+    n_table = shapes.count("table")
+    if n_table / len(content) > TABLE_MAX and n_table >= 3:
+        out.append(f"{n_table}/{len(content)} content slides are tables - a pipeline "
+                   f"is a `flow` (or a `diagram` when it branches), camps or contributions are `cards`, the decisive "
+                   f"number is a `bignum`, the field is a `quadrant`; keep `matrix` "
+                   f"for the one comparison where the cells are the argument")
+    run_kind, run_len, run_start = None, 0, 0
+    for i, k in enumerate(shapes + [None]):
+        if k == run_kind:
+            run_len += 1
+            continue
+        if run_kind in ("table", "text") and run_len >= RUN_MAX:
+            first = flat.index(content[run_start]) + 1
+            what = "table" if run_kind == "table" else "text-only"
+            out.append(f"slides {first}-{first + run_len - 1}: {run_len} {what} slides in "
+                       f"a row - the audience stops reading by the third; turn one "
+                       f"into a figure, flow, cards or big numbers")
+        run_kind, run_len, run_start = k, 1, i
+
+    is_paper = any(str(s.get("role", "")).startswith("paper_") for s in content)
+    if is_paper and not any(s.get("ours") for s in content):
+        out.append("a paper talk with no slide marked `\"ours\": true` - the lab wants "
+                   "to hear what you tried, what it means for our work, or your own "
+                   "critique; put that on its own slide and mark it")
+    return out
 
 
 # Tokens the template ships as "fill me in". Any of these surviving into the

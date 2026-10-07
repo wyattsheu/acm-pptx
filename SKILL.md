@@ -3,7 +3,7 @@ name: acm-pptx
 description: "Build ACM Lab (NYCU) presentations on the lab's official template — weekly progress reports and paper-study talks. Use this skill whenever the user asks for a 進度報告, 週報, progress report, 組會投影片, lab presentation, paper presentation, 論文報告, paper study, or any .pptx/.potx in ACM Lab format, and whenever such a deck is created, edited or read. Also use it when the user hands you a paper PDF or a MinerU directory and asks for slides, when they hand you an outline, when they want a demo video or supplementary clip inside a deck, or when they mention Prof. Huang Ching-Chun's lab meeting. Never build ACM Lab slides from scratch with pptxgenjs — always clone the bundled template."
 license: Lab-internal use
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   template_version: "acm_template.pptx (22 slides, 13.333in x 7.5in)"
 ---
 
@@ -168,6 +168,29 @@ counts follow the material and speaking time, not a fixed quota.
   retain legends and cite the source. Re-plot when verified data is available
   and it improves the explanation, with axis labels 16pt or larger. Label
   simplified diagrams as adaptations; do not recreate experimental imagery.
+- **Pick the exhibit by the shape of the content, not by habit.** A linear pipeline
+  is a `flow`, a branching one a `diagram`; camps, contributions, pros-and-cons are `cards`; the number
+  the talk turns on is a `bignum`; the field is a `quadrant`; a `matrix` is
+  for the one comparison where the cells are the argument. The first decks
+  this skill built were sixteen slides with seven tables and two bullet
+  lists, and that is what the audience remembers. `qa_check.py` warns past a
+  third of content slides as tables, and on three of any one shape in a row.
+  When none fits, `"draw": "design.py:fn"` hands the slide's exhibit region
+  to your own function. All of it: `references/slide-patterns.md`
+  §Graphic exhibits.
+- **A wide figure gets the full width.** A paper's architecture diagram
+  squeezed into a half column lands at ~5in and its labels vanish. Use
+  `figure-bottom` or `figure-full`, or crop to the one component the slide
+  is about; `qa_check.py` computes where a figure lands and warns.
+- **Say what is ours.** A paper talk carries at least one slide marked
+  `"ours": true` — what you tried, what transfers to our work, where you
+  disagree. It draws a small `OUR TAKE` tag, and `qa_check.py` warns when a
+  paper deck has none. A deck that only relays the paper has skipped the part
+  the meeting is for.
+- **Boxes: `at` is `[x, y, w, h]`, `xyxy` is corners.** `figure.py crop`
+  takes corners, annotations take corner-plus-size, and mixing them puts the
+  red box in the wrong place. If you have corners, write `"xyxy"` and do not
+  convert. The full table is `references/slide-patterns.md` §Coordinates.
 - **Video only for claims a still cannot make** — tracking jitter, temporal
   flicker, a robot finishing the task. See §Video below; everything else is a
   figure.
@@ -248,11 +271,15 @@ body text over the word cap, a borrowed figure or video with no source, a video
 PowerPoint cannot decode, text that will not fit its box, a title that wraps
 down into the line beneath it, a template placeholder (`XXX`, `20XX`,
 `Ur Name`, `Conf.Name`) still in the deck, a method or results slide with no
-exhibit, an assertion-evidence slide carrying bullets or no evidence, and a
-generic title with nothing under it. For every `diagram`, it also verifies that
-all declared nodes, edges and groups exist in the `.pptx` as named native
-PowerPoint objects. It warns on thin notes, piled-up callouts,
-a high text-only ratio, and text PowerPoint will auto-shrink. Findings the lab
+exhibit, an assertion-evidence slide carrying bullets or no evidence, a
+generic title with nothing under it, an annotation box past the picture edge
+(corners written as `at`), and a `draw` target that does not exist. For every
+`diagram`, it also verifies that all declared nodes, edges and groups exist in
+the `.pptx` as named native PowerPoint objects. It warns on thin notes,
+piled-up callouts, a high text-only ratio, text PowerPoint will auto-shrink, a
+table-heavy deck or three tables or three text-only slides in a row, a wide
+figure squeezed into a half column, and a paper talk with no `ours` slide.
+Findings the lab
 template already trips on its own are baselined out, so a clean deck really
 does reach `0 error(s)`. `--review` adds the claim sequence, a slide inventory
 and a rubric for content, design and coherence — run it once before handing the
