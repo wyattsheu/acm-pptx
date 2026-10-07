@@ -27,7 +27,7 @@
       ],
       "figure": {
         "src": "figs/fig1.png",
-        "caption": "Fig. 1  Input video (left) to avatar rendered at novel views and expressions (right).",
+        "caption": "Fig. 1  Three input frames become a drivable avatar",
         "source": "Kim et al., CVPR 2026"
       },
       "notes": "先把 task 講清楚再談方法。輸入只有一段手機拍的 monocular video，沒有 camera rig 也沒有 calibration，這是整篇論文所有困難的來源。輸出要能被新的 expression 跟 pose 驅動，所以不能只是一個靜態重建。表示法選 2DGS 貼在 FLAME mesh 上、在 UV space 預測，這個選擇後面 MGPM 的設計會一直用到。"
